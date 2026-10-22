@@ -335,6 +335,7 @@ async function toggleAbsence(day) {
 // ---------------- Login ----------------
 function viewLogin() {
   return `<div class="center"><form class="card login" id="login">
+    <div class="logo"><img src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" /></div>
     <h1>Stempeluhr</h1>
     <input type="email" name="email" placeholder="E-Mail" autocomplete="username" required />
     <input type="password" name="pw" placeholder="Passwort" autocomplete="current-password" required />
