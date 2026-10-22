@@ -155,7 +155,7 @@ function viewWeek() {
   const L = T();
   const m = S.weekMonday;
   const isCurrent = m === mondayOf(today);
-  const w = weekStats(m, S.byDay, S.absences, now);
+  const w = weekStats(m, S.byDay, S.absences, now, isCurrent ? today : null);
   const saldo = saldoThrough(m, S.byDay, S.absences, now);
   // laufende Woche: Differenz nur bis heute (sonst stünde das Soll der restlichen Tage als Minus da)
   const dw = isCurrent ? w.diffToDate : w.diff;
@@ -470,3 +470,4 @@ sb.auth.onAuthStateChange((_ev, session) => {
   if (S.user && S.user.id !== was) loadAll();
   else render();
 });
+
