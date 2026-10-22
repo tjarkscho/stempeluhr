@@ -73,10 +73,16 @@ input, select { width: 100%; padding: 12px; border: 1px solid var(--line); borde
 .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
 .btn:disabled { opacity: .5; }
 .link { display: block; margin: 8px auto; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 8px; }
-.icon { border: 0; background: none; font-size: 20px; padding: 6px 10px; border-radius: 8px; cursor: pointer; min-width: 40px; }
+.icon { border: 0; background: none; padding: 8px; border-radius: 8px; cursor: pointer; min-width: 40px; color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center; }
+.icon:hover { color: var(--text); }
+.icon svg { display: block; }
+.icon.del:hover { color: var(--neg); }
 .icon:disabled { opacity: .3; }
 .hint { color: var(--muted); font-size: 13px; margin: 12px 2px; }
-.warn { background: var(--kr); border-radius: 12px; padding: 12px; margin-bottom: 14px; cursor: pointer; font-weight: 500; }
+.warn { background: var(--kr); border-radius: 12px; padding: 12px; margin-bottom: 14px; cursor: pointer; font-weight: 500;
+  display: flex; gap: 10px; align-items: center; }
+.warn svg { flex: none; color: var(--neg); }
 
 .weeknav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; text-align: center; }
 .weeknav small { display: block; color: var(--muted); }
@@ -102,7 +108,7 @@ sup { color: var(--pause); }
 .list li:last-child { border-bottom: 0; }
 .list li > div:first-child { flex: 1; }
 .list small { display: block; color: var(--muted); font-size: 13px; }
-.dl { font-size: 18px; color: var(--accent); }
+.dl { color: var(--accent); display: flex; }
 
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
 .sheet { background: var(--card); width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); max-height: 90vh; overflow: auto; }
