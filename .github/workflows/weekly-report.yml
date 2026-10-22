@@ -1,0 +1,28 @@
+name: Wochen-PDF
+
+on:
+  schedule:
+    - cron: '12 1 * * 1'   # Montag 01:12 UTC (02:12/03:12 Zürich)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Letzte Woche neu erzeugen'
+        type: boolean
+        default: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/weekly-report.mjs
+        env:
+          TZ: Europe/Zurich
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FORCE: ${{ inputs.force && '1' || '' }}
