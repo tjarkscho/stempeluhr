@@ -37,7 +37,7 @@ assert.equal(d2.pause, 60); assert.equal(d2.total, 480);
 assert.equal(validateDay([{ kind: 'out' }]) !== null, true);
 assert.equal(validateDay(ev('2026-11-02', [['in', '07:00'], ['out', '08:00']])), null);
 
-// Woche + Saldo (Start 23.10.2026, Fr)
+// Woche + Saldo (Start 22.10.2026, Do)
 const entries = [
   ...ev('2026-10-23', [['in', '07:00'], ['out', '16:00']]),            // 9:00 - 0:30 = 8:30
   ...ev('2026-10-26', [['in', '07:00'], ['out', '15:30']]),            // 8:00
@@ -46,14 +46,25 @@ const by = groupByDay(entries);
 const abs = new Map([['2026-10-27', 'ferien']]);
 const now = new Date('2026-11-10T10:00:00Z');
 const w1 = weekStats('2026-10-19', by, abs, now);
-assert.equal(w1.soll, 480); assert.equal(w1.ist, 510); assert.equal(w1.diff, 30);
+assert.equal(w1.soll, 960); assert.equal(w1.ist, 510); assert.equal(w1.diff, -450);
 const w2 = weekStats('2026-10-26', by, abs, now);
 assert.equal(w2.soll, 2400); assert.equal(w2.ist, 960); // 8:00 + Ferien 8:00
-assert.equal(saldoThrough('2026-10-26', by, abs, now), 30 + 960 - 2400);
+assert.equal(saldoThrough('2026-10-26', by, abs, now), -450 + 960 - 2400);
 
 console.log('Alle Tests OK');
 
 // Tage vor Startdatum zählen nicht
 const pre = weekStats('2026-10-19', groupByDay(ev('2026-10-20', [['in', '07:00'], ['out', '16:00']])), new Map(), now);
-assert.equal(pre.ist, 0); assert.equal(pre.soll, 480);
+assert.equal(pre.ist, 0); assert.equal(pre.soll, 960);
 console.log('Starttag-Test OK');
+
+// Laufende Woche: Differenz nur bis heute
+{
+  const nowThu = new Date('2026-10-22T17:00:00Z'); // Do 22.10. = Starttag, 8:28 gearbeitet
+  const w = weekStats('2026-10-19', groupByDay(ev('2026-10-22', [['in', '06:26'], ['out', '15:24']])), new Map(), nowThu, '2026-10-22');
+  assert.equal(w.diffToDate, 28);
+  const nowTue = new Date('2026-10-27T17:00:00Z'); // Di 27.10., Mo 8:00 gearbeitet, Di noch offen
+  const w2 = weekStats('2026-10-26', groupByDay(ev('2026-10-26', [['in', '07:00'], ['out', '15:30']])), new Map(), nowTue, '2026-10-27');
+  assert.equal(w2.diffToDate, 0);
+  console.log('Differenz-bis-heute-Test OK');
+}
