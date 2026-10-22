@@ -45,6 +45,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const ICON = {
   cal: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
   gear: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
+  next: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  close: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+  download: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>',
   out: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 16l-4-4 4-4M5 12h10"/></svg>',
 };
 
@@ -126,7 +132,7 @@ function viewStamp() {
     <button class="big stop" data-act="out" ${S.busy ? 'disabled' : ''}>${L.clockOut}</button>`;
 
   return `
-  ${forgot ? `<div class="warn" data-act="edit" data-day="${forgot}">${L.forgot(fmtDate(forgot))}</div>` : ''}
+  ${forgot ? `<div class="warn" data-act="edit" data-day="${forgot}">${ICON.warn}<span>${L.forgot(fmtDate(forgot))}</span></div>` : ''}
   <section class="card hero">
     <div class="state s-${st.state}"><span class="dot"></span>${stateTxt}</div>
     <div class="clock">${fmtMin(st.total)}</div>
@@ -167,9 +173,9 @@ function viewWeek() {
   const rep = S.reports.find((r) => r.week_start === m);
   return `
   <div class="weeknav">
-    <button class="icon" data-act="wprev">‹</button>
+    <button class="icon" data-act="wprev">${ICON.prev}</button>
     <div><b>${L.week} ${w.week} / ${w.year}</b><small>${fmtDate(w.monday)} – ${fmtDate(w.sunday)}</small></div>
-    <button class="icon" data-act="wnext" ${isCurrent ? 'disabled' : ''}>›</button>
+    <button class="icon" data-act="wnext" ${isCurrent ? 'disabled' : ''}>${ICON.next}</button>
   </div>
   <section class="card pad0">
     <table class="week">
@@ -196,7 +202,7 @@ function viewArchive() {
     <li data-act="dl" data-path="${esc(r.pdf_path)}">
       <div><b>${L.week} ${r.week} / ${r.year}</b><small>${fmtDate(r.week_start)} – ${fmtDate(addDays(r.week_start, 6))}</small></div>
       <div class="r"><span class="${r.diff < 0 ? 'neg' : 'pos'}">${fmtMin(r.diff, true)}</span><small>${L.balance} ${fmtMin(r.saldo, true)}</small></div>
-      <span class="dl">⬇</span>
+      <span class="dl">${ICON.download}</span>
     </li>`).join('')}</ul></section>`;
 }
 
@@ -250,12 +256,12 @@ function viewEditor() {
   const L = T();
   const opts = (k) => Object.entries(L.kind).map(([v, l]) => `<option value="${v}" ${v === k ? 'selected' : ''}>${l}</option>`).join('');
   return `<div class="modal"><div class="sheet">
-    <div class="sheethead"><b>${L.days[weekday(ed.day)]}, ${fmtDate(ed.day)}</b><button class="icon" data-act="edclose">✕</button></div>
+    <div class="sheethead"><b>${L.days[weekday(ed.day)]}, ${fmtDate(ed.day)}</b><button class="icon" data-act="edclose">${ICON.close}</button></div>
     ${ed.rows.length ? '' : `<p class="hint">${L.noEntries}</p>`}
     ${ed.rows.map((r, i) => `<div class="edrow">
       <select data-ed="kind" data-i="${i}">${opts(r.kind)}</select>
       <input type="time" value="${r.time}" data-ed="time" data-i="${i}" />
-      <button class="icon del" data-act="edrm" data-i="${i}">🗑</button></div>`).join('')}
+      <button class="icon del" data-act="edrm" data-i="${i}">${ICON.trash}</button></div>`).join('')}
     <button class="btn ghost" data-act="edadd">${L.addEntry}</button>
     <p class="hint">${L.manualHint}</p>
     <button class="btn" data-act="edsave" ${S.busy ? 'disabled' : ''}>${L.save}</button>
@@ -319,11 +325,11 @@ function viewDrawer() {
   const canNext = y < CONFIG.calendarTo || mo < 11;
   return `<div class="drawer-bg" data-act="drawer"></div>
   <aside class="drawer">
-    <div class="sheethead"><b>${L.absTitle}</b><button class="icon" data-act="drawer">✕</button></div>
+    <div class="sheethead"><b>${L.absTitle}</b><button class="icon" data-act="drawer">${ICON.close}</button></div>
     <div class="weeknav">
-      <button class="icon" data-act="cprev" ${canPrev ? '' : 'disabled'}>‹</button>
+      <button class="icon" data-act="cprev" ${canPrev ? '' : 'disabled'}>${ICON.prev}</button>
       <div><b>${L.months[mo]} ${y}</b></div>
-      <button class="icon" data-act="cnext" ${canNext ? '' : 'disabled'}>›</button>
+      <button class="icon" data-act="cnext" ${canNext ? '' : 'disabled'}>${ICON.next}</button>
     </div>
     <div class="cal">${L.daysShort.map((d) => `<div class="ch">${d}</div>`).join('')}${cells}</div>
     <div class="legend"><span><i class="a-ferien">${L.absShort.ferien}</i> ${L.absF}</span><span><i class="a-ferien_halb">½</i> ${L.absH}</span><span><i class="a-krank">${L.absShort.krank}</i> ${L.absK}</span><span><i class="hol">${L.absShort.hol}</i> ${L.absFT}</span></div>
@@ -372,7 +378,7 @@ function prefsControls() {
 
 function viewSettings() {
   return `<div class="modal" data-act="setclose"><div class="sheet" data-stop="1">
-    <div class="sheethead"><b>${T().settings}</b><button class="icon" data-act="setclose">✕</button></div>
+    <div class="sheethead"><b>${T().settings}</b><button class="icon" data-act="setclose">${ICON.close}</button></div>
     ${prefsControls()}
   </div></div>`;
 }
