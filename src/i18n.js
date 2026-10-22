@@ -1,0 +1,107 @@
+// Sprache (DE/FR) und Theme – pro Gerät gespeichert
+const STORE = 'stempeluhr.prefs';
+
+const DICT = {
+  de: {
+    days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'],
+    daysShort: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
+    months: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
+    kind: { in: 'Ein', out: 'Aus', break_start: 'Pause Start', break_end: 'Pause Ende' },
+    labels: {},
+    email: 'E-Mail', password: 'Passwort', login: 'Anmelden', loginFailed: 'Anmeldung fehlgeschlagen',
+    tabStamp: 'Stempeln', tabWeek: 'Woche', tabArchive: 'Archiv',
+    calendar: 'Ferienkalender', settings: 'Einstellungen', logout: 'Abmelden',
+    stateOff: 'Ausgestempelt', stateNone: 'Nicht eingestempelt', stateWork: 'Arbeitet', stateBreak: 'Pause',
+    clockIn: 'Einstempeln', clockOut: 'Ausstempeln', pause: 'Pause', pauseEnd: 'Pause beenden',
+    workedToday: 'heute gearbeitet', in: 'Ein', out: 'Aus', remaining: 'Noch', balance: 'Saldo',
+    forgot: (d) => `⚠️ ${d}: Ausstempeln fehlt – tippen zum Korrigieren`,
+    breakHint: 'Gesetzliche Mindestpause (ArG Art. 15) wird beim Ausstempeln automatisch berücksichtigt: ab 5:30 h → 15 min, ab 7 h → 30 min, ab 9 h → 60 min.',
+    correctToday: 'Heute korrigieren',
+    week: 'KW', day: 'Tag', total: 'Total', target: 'Soll', actual: 'Ist', diff: 'Differenz',
+    balanceTotal: 'Saldo total', today: '(heute)',
+    weekHint: 'Tag antippen zum Korrigieren. <sup>*</sup> = manuell korrigiert.',
+    pdfMake: 'PDF erzeugen', pdfRemake: 'PDF neu erzeugen', pdfDownload: 'PDF herunterladen', pdfSaved: 'PDF gespeichert', pdfError: 'PDF-Fehler: ',
+    archiveEmpty: 'Noch keine Wochen-PDFs. Das erste wird am Montag nach der ersten Woche automatisch erstellt.',
+    downloadFailed: 'Download fehlgeschlagen: ',
+    noEntries: 'Keine Einträge.', addEntry: '+ Eintrag', manualHint: 'Geänderte Einträge werden als „manuell korrigiert“ markiert.',
+    save: 'Speichern', fillTimes: 'Bitte alle Zeiten ausfüllen',
+    badOrder: 'Ungültige Reihenfolge (Ein → Pause Start → Pause Ende → Aus)',
+    saved: 'Gespeichert', savedPdf: 'Gespeichert – PDF dieser Woche bei Bedarf neu erzeugen',
+    error: 'Fehler: ', loadFailed: 'Laden fehlgeschlagen: ',
+    absTitle: 'Ferien & Abwesenheit', absF: 'Ferien', absH: 'Halbtag', absK: 'Krank', absFT: 'Feiertag VD',
+    absShort: { ferien: 'F', ferien_halb: '½', krank: 'K', hol: 'FT' },
+    absHint: 'Tag antippen: Ferien → ½ Ferien → Krank → leer. Wird mit Tagessoll (8:00 / 4:00) gutgeschrieben.',
+    vacDays: (y, n) => `Ferientage ${y}: ${n}`,
+    theme: 'Farbschema', language: 'Sprache',
+    themes: { weiss: 'Weiss', dunkel: 'Dunkel', creme: 'Creme', dunkelblau: 'Dunkelblau' },
+  },
+  fr: {
+    days: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+    daysShort: ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'],
+    months: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
+    kind: { in: 'Entrée', out: 'Sortie', break_start: 'Début pause', break_end: 'Fin pause' },
+    labels: {
+      'Neujahr': 'Nouvel An', 'Berchtoldstag': 'Saint-Berthold', 'Karfreitag': 'Vendredi saint',
+      'Ostermontag': 'Lundi de Pâques', 'Auffahrt': 'Ascension', 'Pfingstmontag': 'Lundi de Pentecôte',
+      'Bundesfeier': 'Fête nationale', 'Bettagsmontag': 'Lundi du Jeûne', 'Weihnachten': 'Noël',
+      'Ferien': 'Vacances', '½ Ferien': '½ vacances', 'Krank': 'Maladie',
+    },
+    email: 'E-mail', password: 'Mot de passe', login: 'Se connecter', loginFailed: 'Échec de la connexion',
+    tabStamp: 'Pointer', tabWeek: 'Semaine', tabArchive: 'Archives',
+    calendar: 'Calendrier des vacances', settings: 'Réglages', logout: 'Déconnexion',
+    stateOff: 'Pointé sortie', stateNone: 'Pas pointé', stateWork: 'Au travail', stateBreak: 'Pause',
+    clockIn: 'Pointer l’entrée', clockOut: 'Pointer la sortie', pause: 'Pause', pauseEnd: 'Fin de pause',
+    workedToday: 'travaillé aujourd’hui', in: 'Entrée', out: 'Sortie', remaining: 'Reste', balance: 'Solde',
+    forgot: (d) => `⚠️ ${d} : sortie non pointée – toucher pour corriger`,
+    breakHint: 'La pause minimale légale (LTr art. 15) est appliquée automatiquement : dès 5 h 30 → 15 min, dès 7 h → 30 min, dès 9 h → 60 min.',
+    correctToday: 'Corriger aujourd’hui',
+    week: 'Sem.', day: 'Jour', total: 'Total', target: 'Prévu', actual: 'Effectif', diff: 'Différence',
+    balanceTotal: 'Solde total', today: '(aujourd’hui)',
+    weekHint: 'Toucher un jour pour corriger. <sup>*</sup> = corrigé manuellement.',
+    pdfMake: 'Créer le PDF', pdfRemake: 'Recréer le PDF', pdfDownload: 'Télécharger le PDF', pdfSaved: 'PDF enregistré', pdfError: 'Erreur PDF : ',
+    archiveEmpty: 'Aucun PDF hebdomadaire pour l’instant. Le premier sera créé automatiquement le lundi suivant la première semaine.',
+    downloadFailed: 'Échec du téléchargement : ',
+    noEntries: 'Aucune entrée.', addEntry: '+ Entrée', manualHint: 'Les entrées modifiées sont marquées « corrigé manuellement ».',
+    save: 'Enregistrer', fillTimes: 'Veuillez remplir toutes les heures',
+    badOrder: 'Ordre invalide (Entrée → Début pause → Fin pause → Sortie)',
+    saved: 'Enregistré', savedPdf: 'Enregistré – recréer le PDF de cette semaine si nécessaire',
+    error: 'Erreur : ', loadFailed: 'Échec du chargement : ',
+    absTitle: 'Vacances & absences', absF: 'Vacances', absH: 'Demi-journée', absK: 'Maladie', absFT: 'Férié VD',
+    absShort: { ferien: 'V', ferien_halb: '½', krank: 'M', hol: 'JF' },
+    absHint: 'Toucher un jour : Vacances → ½ vacances → Maladie → vide. Crédité avec le temps prévu (8:00 / 4:00).',
+    vacDays: (y, n) => `Jours de vacances ${y} : ${n}`,
+    theme: 'Thème', language: 'Langue',
+    themes: { weiss: 'Blanc', dunkel: 'Sombre', creme: 'Crème', dunkelblau: 'Bleu nuit' },
+  },
+};
+
+export const THEMES = ['weiss', 'dunkel', 'creme', 'dunkelblau'];
+const THEME_COLOR = { weiss: '#ffffff', dunkel: '#1b1e24', creme: '#fbf7ef', dunkelblau: '#12233a' };
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; }
+}
+const saved = load();
+const sysDark = typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
+
+export const prefs = {
+  lang: saved.lang === 'fr' ? 'fr' : 'de',
+  theme: THEMES.includes(saved.theme) ? saved.theme : (sysDark ? 'dunkel' : 'weiss'),
+};
+
+export function setPref(k, v) {
+  prefs[k] = v;
+  try { localStorage.setItem(STORE, JSON.stringify(prefs)); } catch { /* egal */ }
+  applyPrefs();
+}
+
+export function applyPrefs() {
+  document.documentElement.dataset.theme = prefs.theme;
+  document.documentElement.lang = prefs.lang === 'fr' ? 'fr-CH' : 'de-CH';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[prefs.theme]);
+}
+
+/** Aktuelles Wörterbuch */
+export const T = () => DICT[prefs.lang];
+/** Übersetzt Bezeichnungen aus der Logik (Feiertage, Ferien …) */
+export const label = (s) => (s ? DICT[prefs.lang].labels[s] || s : s);
