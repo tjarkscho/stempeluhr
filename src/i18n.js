@@ -33,7 +33,7 @@ const DICT = {
     absHint: 'Tag antippen: Ferien → ½ Ferien → Krank → leer. Wird mit Tagessoll (8:00 / 4:00) gutgeschrieben.',
     vacDays: (y, n) => `Ferientage ${y}: ${n}`,
     theme: 'Farbschema', language: 'Sprache',
-    themes: { weiss: 'Weiss', dunkel: 'Dunkel', creme: 'Creme', dunkelblau: 'Dunkelblau' },
+    themes: { auto: 'Auto', weiss: 'Weiss', dunkel: 'Dunkel', creme: 'Creme', dunkelblau: 'Dunkelblau' },
   },
   fr: {
     days: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
@@ -71,23 +71,27 @@ const DICT = {
     absHint: 'Toucher un jour : Vacances → ½ vacances → Maladie → vide. Crédité avec le temps prévu (8:00 / 4:00).',
     vacDays: (y, n) => `Jours de vacances ${y} : ${n}`,
     theme: 'Thème', language: 'Langue',
-    themes: { weiss: 'Blanc', dunkel: 'Sombre', creme: 'Crème', dunkelblau: 'Bleu nuit' },
+    themes: { auto: 'Auto', weiss: 'Blanc', dunkel: 'Sombre', creme: 'Crème', dunkelblau: 'Bleu nuit' },
   },
 };
 
-export const THEMES = ['weiss', 'dunkel', 'creme', 'dunkelblau'];
+export const THEMES = ['auto', 'weiss', 'dunkel', 'creme', 'dunkelblau'];
 const THEME_COLOR = { weiss: '#ffffff', dunkel: '#1b1e24', creme: '#fbf7ef', dunkelblau: '#12233a' };
 
 function load() {
   try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; }
 }
 const saved = load();
-const sysDark = typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
+const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
+const browserFr = typeof navigator !== 'undefined' && /^fr/i.test(navigator.language || '');
 
 export const prefs = {
-  lang: saved.lang === 'fr' ? 'fr' : 'de',
-  theme: THEMES.includes(saved.theme) ? saved.theme : (sysDark ? 'dunkel' : 'weiss'),
+  lang: saved.lang === 'fr' || saved.lang === 'de' ? saved.lang : (browserFr ? 'fr' : 'de'),
+  theme: THEMES.includes(saved.theme) ? saved.theme : 'auto', // Standard: wie das Gerät
 };
+
+// Gerät wechselt hell/dunkel -> sofort übernehmen
+mq?.addEventListener?.('change', () => { if (prefs.theme === 'auto') applyPrefs(); });
 
 export function setPref(k, v) {
   prefs[k] = v;
@@ -96,9 +100,14 @@ export function setPref(k, v) {
 }
 
 export function applyPrefs() {
-  document.documentElement.dataset.theme = prefs.theme;
+  const theme = prefs.theme === 'auto' ? (mq?.matches ? 'dunkel' : 'weiss') : prefs.theme;
+  document.documentElement.dataset.theme = theme;
   document.documentElement.lang = prefs.lang === 'fr' ? 'fr-CH' : 'de-CH';
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[prefs.theme]);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[theme]);
+  // Icons passend zum Farbschema
+  const base = import.meta.env.BASE_URL;
+  document.querySelector('link[rel="icon"]')?.setAttribute('href', `${base}favicon-${theme}.png`);
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-${theme}.png`);
 }
 
 /** Aktuelles Wörterbuch */
