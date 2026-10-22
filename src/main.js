@@ -157,6 +157,8 @@ function viewWeek() {
   const isCurrent = m === mondayOf(today);
   const w = weekStats(m, S.byDay, S.absences, now);
   const saldo = saldoThrough(m, S.byDay, S.absences, now);
+  // laufende Woche: Differenz nur bis heute (sonst stünde das Soll der restlichen Tage als Minus da)
+  const dw = isCurrent ? w.diffToDate : w.diff;
   const rows = w.days.map((d, i) => {
     const has = !!d.in;
     const cls = [i >= 5 ? 'we' : '', d.day === today ? 'today' : '', d.day < CONFIG.startDate ? 'pre' : ''].join(' ');
@@ -186,7 +188,7 @@ function viewWeek() {
   <div class="stats">
     <div><span>${L.target}</span><b>${fmtMin(w.soll)}</b></div>
     <div><span>${L.actual}</span><b>${fmtMin(w.ist)}</b></div>
-    <div><span>${L.diff}</span><b class="${w.diff < 0 ? 'neg' : 'pos'}">${fmtMin(w.diff, true)}</b></div>
+    <div><span>${L.diff}${isCurrent ? ' ' + L.today : ''}</span><b class="${dw < 0 ? 'neg' : 'pos'}">${fmtMin(dw, true)}</b></div>
     <div><span>${L.balanceTotal}${isCurrent ? ' ' + L.today : ''}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b></div>
   </div>
   <p class="hint">${L.weekHint}</p>
