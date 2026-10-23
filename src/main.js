@@ -597,7 +597,7 @@ function viewSettings() {
 // ---------------- Rendern ----------------
 // ---------------- Seiten-Slider + Animationen ----------------
 const VIEWS = ['stamp', 'week', 'archive'];
-const EASE = 'cubic-bezier(.32,.72,0,1)';              // iOS-artige Kurve
+const EASE = 'cubic-bezier(.22,1,.36,1)';               // weiches Auslaufen (easeOutQuint)
 let shownIdx = 0, dragDx = 0, enterAnim = null;   // enterAnim: 'sheet' | 'drawer' – nur beim Öffnen animieren
 const segPrev = {};
 const viewOf = (v) => (v === 'stamp' ? viewStamp() : v === 'week' ? viewWeek() : viewArchive());
@@ -610,13 +610,13 @@ function animateAfterRender() {
     pager.style.transform = `translateX(${-to * 100}%)`;
     if (ind) ind.style.transform = `translateX(${to * 100}%)`;
     if (shownIdx !== to || dragDx) {
+      if (shownIdx !== to) window.scrollTo({ top: 0 });
       const w = pager.clientWidth || 1;
       const from = `translateX(calc(${-shownIdx * 100}% + ${dragDx}px))`;
       pager.classList.add('moving');
-      const an = pager.animate([{ transform: from }, { transform: `translateX(${-to * 100}%)` }], { duration: 460, easing: EASE });
+      const an = pager.animate([{ transform: from }, { transform: `translateX(${-to * 100}%)` }], { duration: 520, easing: EASE });
       an.onfinish = an.oncancel = () => pager.classList.remove('moving');
-      ind?.animate([{ transform: `translateX(${(shownIdx - dragDx / w) * 100}%)` }, { transform: `translateX(${to * 100}%)` }], { duration: 460, easing: EASE });
-      if (shownIdx !== to) window.scrollTo({ top: 0 });
+      ind?.animate([{ transform: `translateX(${(shownIdx - dragDx / w) * 100}%)` }, { transform: `translateX(${to * 100}%)` }], { duration: 520, easing: EASE });
     }
   }
   shownIdx = to; dragDx = 0;
@@ -628,7 +628,7 @@ function animateAfterRender() {
     if (!ind) return;
     ind.style.transform = `translateX(${i * 100}%)`;
     const prev = segPrev[seg.dataset.seg];
-    if (prev != null && prev !== i) ind.animate([{ transform: `translateX(${prev * 100}%)` }, { transform: `translateX(${i * 100}%)` }], { duration: 420, easing: EASE });
+    if (prev != null && prev !== i) ind.animate([{ transform: `translateX(${prev * 100}%)` }, { transform: `translateX(${i * 100}%)` }], { duration: 480, easing: EASE });
     segPrev[seg.dataset.seg] = i;
   });
 }
@@ -681,12 +681,12 @@ function render() {
   // Fokus/Scroll im Editor erhalten
   const active = document.activeElement?.dataset?.ed ? { ed: document.activeElement.dataset.ed, i: document.activeElement.dataset.i } : null;
   app.innerHTML = `
-  <header class="glass-bar"><img class="hlogo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" /><div>
+  <header><img class="hlogo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" /><div>
     <button class="icon" data-act="drawer" title="${L.calendar}" aria-label="${L.calendar}">${ICON.cal}</button>
     <button class="icon" data-act="settings" title="${L.settings}" aria-label="${L.settings}">${ICON.gear}</button>
     <button class="icon" data-act="logout" title="${L.logout}" aria-label="${L.logout}">${ICON.out}</button></div></header>
   <main><div class="pager">${VIEWS.map((v) => `<section class="page ${v === S.view ? 'active' : ''}"><div class="page-in">${viewOf(v)}</div></section>`).join('')}</div></main>
-  <nav><div class="tabbar glass"><span class="ind"></span>${tab('stamp', L.tabStamp)}${tab('week', L.tabWeek)}${tab('archive', L.tabArchive)}</div></nav>
+  <nav><div class="tabbar"><span class="ind"></span>${tab('stamp', L.tabStamp)}${tab('week', L.tabWeek)}${tab('archive', L.tabArchive)}</div></nav>
   ${S.editor ? viewEditor() : ''}
   ${S.drawer ? viewDrawer() : ''}
   ${S.settings ? viewSettings() : ''}

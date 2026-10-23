@@ -102,13 +102,15 @@ export async function buildMonthPdf(ym, st, saldo, logo = null) {
   y -= 7;
   hline(y, 0.8, C.faint);
 
-  const rowH = 16.2;
+  // Zeilenhöhe so wählen, dass Zusammenfassung + 4 Fussnoten sicher über der Fusszeile Platz haben
+  const reserve = 24 + 54 + 20 + 4 * 11 + 14 + M;
+  const rowH = Math.min(16.2, (y - reserve) / st.days.length);
   let manual = false;
   for (const d of st.days) {
     y -= rowH;
     const wd = weekday(d.day);
     const has = !!d.in;
-    const quiet = (wd >= 5 && !has) || !d.counted;
+    const quiet = (wd >= 5 && !has) || !d.counted || (!d.done && !has);
     const col = quiet ? C.faint : C.text;
     text(DAYS[wd], X.day, y + 5, { color: col });
     text(fmtDate(d.day), X.date, y + 5, { color: quiet ? C.faint : C.muted });
