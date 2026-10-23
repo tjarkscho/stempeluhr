@@ -189,7 +189,7 @@ export function weekStats(monday, byDay, absences, now = new Date(), sollUntil =
   }
   const { year, week } = isoWeek(monday);
   const bonus = days.reduce((a, d) => a + d.bonus, 0);
-  return { bonus, monday, sunday: addDays(monday, 6), year, week, days, soll, ist, diff: ist - soll, diffToDate: istToDate - sollToDate };
+  return { bonus, monday, sunday: addDays(monday, 6), year, week, days, soll, ist, diff: ist - soll, sollToDate, istToDate, diffToDate: istToDate - sollToDate };
 }
 
 /** Kumulierter Saldo vom Startdatum bis inkl. Woche `monday` (laufende Woche: Soll nur bis heute) */

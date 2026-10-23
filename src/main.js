@@ -269,6 +269,7 @@ function viewWeek() {
   ${saldoChart(L, now)}
   <p class="hint">${L.weekHint}</p>
   ${done && addDays(m, 6) >= CONFIG.startDate ? `<button class="btn" data-act="genpdf" ${S.busy ? 'disabled' : ''}>${rep ? L.pdfRemake : L.pdfMake}</button>` : ''}
+  ${isCurrent ? `<button class="btn ghost" data-act="draftpdf" ${S.busy ? 'disabled' : ''}>${L.pdfDraft}</button><p class="hint">${L.pdfDraftHint}</p>` : ''}
   ${rep ? `<button class="btn ghost" data-act="dl" data-path="${esc(rep.pdf_path)}">${L.pdfDownload}</button>` : ''}`;
 }
 
@@ -433,6 +434,22 @@ async function getLogo() {
     logoCache = r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
   } catch { logoCache = null; }
   return logoCache;
+}
+
+// Zwischenstand der laufenden Woche: nur herunterladen, nicht im Archiv speichern
+async function draftPdf() {
+  if (S.busy) return;
+  S.busy = true; render();
+  try {
+    const now = new Date(), today = dayKey(now), m = mondayOf(today);
+    const w = weekStats(m, S.byDay, S.absences, now, today);
+    const saldo = saldoThrough(m, S.byDay, S.absences, now);
+    const stamp = `Stand ${fmtDate(today)}, ${hhmm(now)}`;
+    const { buildWeekPdf } = await import('./lib/pdf.js');
+    const bytes = await buildWeekPdf(w, saldo, await getLogo(), { draft: true, today, stamp });
+    S.busy = false; render();
+    await saveFile(bytes, `Arbeitszeitnachweis_${w.year}-KW${String(w.week).padStart(2, '0')}_Zwischenstand_${today.slice(8)}-${today.slice(5, 7)}.pdf`);
+  } catch (e) { S.busy = false; render(); toast(T().pdfError + e.message, true); }
 }
 
 async function generatePdf(monday) {
@@ -747,6 +764,7 @@ app.addEventListener('click', async (e) => {
   else if (a === 'cnext') { if (++S.calMonth > 11) { S.calMonth = 0; S.calYear++; } render(); }
   else if (a === 'abs') toggleAbsence(el.dataset.day);
   else if (a === 'genpdf') generatePdf(S.weekMonday);
+  else if (a === 'draftpdf') draftPdf();
   else if (a === 'dl') download(el.dataset.path);
   else if (a === 'arch') { S.archTab = el.dataset.v; render(); }
   else if (a === 'rep') periodPdf(el.dataset.k);

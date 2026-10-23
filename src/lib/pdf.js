@@ -19,7 +19,12 @@ const C = {
  * @param logo     Uint8Array (PNG oder JPG) oder null
  * @returns Uint8Array
  */
-export async function buildWeekPdf(w, saldo, logo = null) {
+/**
+ * @param opts.draft  Zwischenstand der laufenden Woche: Werte bis jetzt, klar gekennzeichnet
+ * @param opts.today  'YYYY-MM-DD' (für Zwischenstand: spätere Tage leer lassen)
+ * @param opts.stamp  Text "Stand …"
+ */
+export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
   const doc = await PDFDocument.create();
   doc.setTitle(`Arbeitszeitnachweis KW ${w.week} ${w.year}`);
   doc.setAuthor(CONFIG.employee);
@@ -47,10 +52,10 @@ export async function buildWeekPdf(w, saldo, logo = null) {
       page.drawImage(img, { x: M, y: y - img.height * s, width: img.width * s, height: img.height * s });
     } catch { /* Logo ungültig -> weglassen */ }
   }
-  text('ARBEITSZEITNACHWEIS', W - M, y - 10, { f: bold, size: 8, color: C.muted, align: 'right' });
+  text(opts.draft ? 'ARBEITSZEITNACHWEIS · ZWISCHENSTAND' : 'ARBEITSZEITNACHWEIS', W - M, y - 10, { f: bold, size: 8, color: opts.draft ? C.neg : C.muted, align: 'right' });
   text(`KW ${w.week}`, W - M, y - 34, { f: bold, size: 22, align: 'right' });
   y -= 62;
-  text(`${fmtDate(w.monday)} – ${fmtDate(w.sunday)}`, W - M, y + 8, { size: 9, color: C.muted, align: 'right' });
+  text(`${fmtDate(w.monday)} – ${fmtDate(w.sunday)}${opts.draft ? ` · ${opts.stamp}` : ''}`, W - M, y + 8, { size: 9, color: C.muted, align: 'right' });
 
   // ---- Stammdaten in einer Zeile ----
   y -= 22;
@@ -91,7 +96,8 @@ export async function buildWeekPdf(w, saldo, logo = null) {
       text(d.out ? hhmm(d.out) + star(d.manualOut) : '–', X.out, y + 8, { align: 'right' });
       text(fmtMin(d.pause) + star(d.manualPause) + (d.autoPause ? (anyAuto = true, '†') : ''), X.pause, y + 8, { align: 'right', color: C.muted });
     }
-    const tot = d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '');
+    const future = opts.draft && opts.today && d.day > opts.today;
+    const tot = future ? '' : d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '');
     text(tot, X.total, y + 8, { align: 'right', f: bold });
     const notes = [d.label, d.bonus ? `+${Math.round(d.rate * 100)} % (+${fmtMin(d.bonus)})` : null,
       d.incomplete ? 'Ausstempeln fehlt' : null].filter(Boolean).join(' · ');
@@ -103,8 +109,9 @@ export async function buildWeekPdf(w, saldo, logo = null) {
   y -= 30 + 58;
   const bandH = 58;
   page.drawRectangle({ x: M, y, width: W - 2 * M, height: bandH, color: C.band });
-  const cells = [['Soll', fmtMin(w.soll), C.text], ['Ist', fmtMin(w.ist), C.text],
-    ['Differenz', fmtMin(w.diff, true), signed(w.diff)], ['Saldo total', fmtMin(saldo, true), signed(saldo)]];
+  const soll = opts.draft ? w.sollToDate : w.soll, ist = opts.draft ? w.istToDate : w.ist, diff = opts.draft ? w.diffToDate : w.diff;
+  const cells = [[opts.draft ? 'Soll bis heute' : 'Soll', fmtMin(soll), C.text], [opts.draft ? 'Ist bis heute' : 'Ist', fmtMin(ist), C.text],
+    ['Differenz', fmtMin(diff, true), signed(diff)], ['Saldo total', fmtMin(saldo, true), signed(saldo)]];
   const cw = (W - 2 * M) / cells.length;
   cells.forEach(([k, v, col], i) => {
     const x = M + 16 + i * cw;
@@ -116,6 +123,7 @@ export async function buildWeekPdf(w, saldo, logo = null) {
   // ---- Fussnoten ----
   y -= 26;
   const notes = [];
+  if (opts.draft) notes.push(`Zwischenstand – ${opts.stamp || ''}. Kein abgeschlossener Wochennachweis; laufender Tag nur, wenn bereits ausgestempelt.`);
   if (anyManual) notes.push('* manuell korrigiert');
   if (anyAuto) notes.push('† Pause auf gesetzliches Minimum erhöht (ArG Art. 15)');
   notes.push('Feiertage, Ferien und Krankheit mit Tagessoll gutgeschrieben · Zuschlag als Zeit: Sa +25 %, So/Feiertag +50 % · Überstunden Mo–Fr 1:1');
