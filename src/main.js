@@ -430,7 +430,7 @@ let logoCache;
 async function getLogo() {
   if (logoCache !== undefined) return logoCache;
   try {
-    const r = await fetch(`${import.meta.env.BASE_URL}logo.png`);
+    const r = await fetch(`${import.meta.env.BASE_URL}logo-black.png`);
     logoCache = r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
   } catch { logoCache = null; }
   return logoCache;

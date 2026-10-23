@@ -38,9 +38,9 @@ const absences = new Map((await all('absences', 'day,kind')).map((a) => [a.day, 
 const existing = new Set((await all('weekly_reports', 'week_start')).map((r) => r.week_start));
 const byDay = groupByDay(entries);
 
-const logoPath = new URL('../public/logo.png', import.meta.url);
+const logoPath = new URL('../public/logo-black.png', import.meta.url);
 const logo = fs.existsSync(logoPath) ? new Uint8Array(fs.readFileSync(logoPath)) : null;
-if (!logo) console.warn('public/logo.png nicht gefunden – PDF ohne Logo.');
+if (!logo) console.warn('public/logo-black.png nicht gefunden – PDF ohne Logo.');
 
 const now = new Date();
 const lastMonday = addDays(mondayOf(dayKey(now)), -7); // letzte abgeschlossene Woche
