@@ -276,7 +276,7 @@ function viewWeek() {
 function viewArchive() {
   const L = T();
   const tab = (v, l) => `<button type="button" class="${S.archTab === v ? 'on' : ''}" data-act="arch" data-v="${v}">${l}</button>`;
-  const tabs = `<div class="seg seg3">${tab('weeks', L.archWeeks)}${tab('months', L.archMonths)}${tab('years', L.archYears)}</div>`;
+  const tabs = `<div class="seg seg3" data-seg="arch"><span class="ind"></span>${tab('weeks', L.archWeeks)}${tab('months', L.archMonths)}${tab('years', L.archYears)}</div>`;
   if (S.archTab === 'months' || S.archTab === 'years') return tabs + viewPeriods(L);
   if (!S.reports.length) return tabs + `<section class="card"><p>${L.archiveEmpty}</p></section>`;
   return tabs + `<section class="card pad0"><ul class="list">${S.reports.map((r) => `
@@ -451,6 +451,7 @@ async function generatePdf(monday) {
 
 // ---------------- Tageskorrektur ----------------
 function openEditor(day) {
+  enterAnim = 'sheet';
   const events = S.byDay.get(day) || [];
   if (events.some((e) => e.pending) || !navigator.onLine) return toast(T().offlineEdit, true);
   S.editor = { day, rows: events.map((e) => ({ id: e.id, kind: e.kind, time: hhmm(new Date(e.ts)), orig: e })) };
@@ -571,7 +572,7 @@ function viewLogin() {
 // ---------------- Einstellungen ----------------
 function prefsControls() {
   const L = T();
-  const seg = (k, vals, lab) => `<div class="seg">${vals.map((v) =>
+  const seg = (k, vals, lab) => `<div class="seg" data-seg="${k}"><span class="ind"></span>${vals.map((v) =>
     `<button type="button" class="${prefs[k] === v ? 'on' : ''}" data-act="pref" data-k="${k}" data-v="${v}">${lab(v)}</button>`).join('')}</div>`;
   return `<div class="prefs">
     <span class="plabel">${L.theme}</span>
@@ -594,27 +595,104 @@ function viewSettings() {
 }
 
 // ---------------- Rendern ----------------
+// ---------------- Seiten-Slider + Animationen ----------------
+const VIEWS = ['stamp', 'week', 'archive'];
+const EASE = 'cubic-bezier(.32,.72,0,1)';              // iOS-artige Kurve
+let shownIdx = 0, dragDx = 0, enterAnim = null;   // enterAnim: 'sheet' | 'drawer' – nur beim Öffnen animieren
+const segPrev = {};
+const viewOf = (v) => (v === 'stamp' ? viewStamp() : v === 'week' ? viewWeek() : viewArchive());
+
+function animateAfterRender() {
+  const pager = app.querySelector('.pager');
+  const ind = app.querySelector('.tabbar .ind');
+  const to = VIEWS.indexOf(S.view);
+  if (pager) {
+    pager.style.transform = `translateX(${-to * 100}%)`;
+    if (ind) ind.style.transform = `translateX(${to * 100}%)`;
+    if (shownIdx !== to || dragDx) {
+      const w = pager.clientWidth || 1;
+      const from = `translateX(calc(${-shownIdx * 100}% + ${dragDx}px))`;
+      pager.classList.add('moving');
+      const an = pager.animate([{ transform: from }, { transform: `translateX(${-to * 100}%)` }], { duration: 460, easing: EASE });
+      an.onfinish = an.oncancel = () => pager.classList.remove('moving');
+      ind?.animate([{ transform: `translateX(${(shownIdx - dragDx / w) * 100}%)` }, { transform: `translateX(${to * 100}%)` }], { duration: 460, easing: EASE });
+      if (shownIdx !== to) window.scrollTo({ top: 0 });
+    }
+  }
+  shownIdx = to; dragDx = 0;
+  // Segment-Umschalter: Glas-Tropfen gleitet zur neuen Auswahl
+  app.querySelectorAll('.seg[data-seg]').forEach((seg) => {
+    const btns = [...seg.querySelectorAll('button')];
+    const i = Math.max(0, btns.findIndex((b) => b.classList.contains('on')));
+    const ind = seg.querySelector('.ind');
+    if (!ind) return;
+    ind.style.transform = `translateX(${i * 100}%)`;
+    const prev = segPrev[seg.dataset.seg];
+    if (prev != null && prev !== i) ind.animate([{ transform: `translateX(${prev * 100}%)` }, { transform: `translateX(${i * 100}%)` }], { duration: 420, easing: EASE });
+    segPrev[seg.dataset.seg] = i;
+  });
+}
+
+// Wischen zwischen den Tabs (folgt dem Finger)
+let touch = null;
+app.addEventListener('touchstart', (e) => {
+  if (!S.user || S.editor || S.drawer || S.settings || !e.target.closest('main') || e.target.closest('input,select,textarea,.c-hit')) return;
+  const t = e.touches[0];
+  touch = { x: t.clientX, y: t.clientY, t: performance.now(), dir: null, dx: 0 };
+}, { passive: true });
+app.addEventListener('touchmove', (e) => {
+  if (!touch) return;
+  const t = e.touches[0];
+  const dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+  if (!touch.dir) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; touch.dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v'; }
+  if (touch.dir !== 'h') return;
+  e.preventDefault();
+  const idx = VIEWS.indexOf(S.view);
+  const edge = (dx > 0 && idx === 0) || (dx < 0 && idx === VIEWS.length - 1);
+  touch.dx = edge ? dx * 0.3 : dx;                       // Gummiband am Rand
+  const pager = app.querySelector('.pager'), ind = app.querySelector('.tabbar .ind');
+  pager.classList.add('moving');
+  pager.style.transform = `translateX(calc(${-idx * 100}% + ${touch.dx}px))`;
+  if (ind) ind.style.transform = `translateX(${(idx - touch.dx / pager.clientWidth) * 100}%)`;
+}, { passive: false });
+app.addEventListener('touchend', () => {
+  if (!touch) return;
+  const tc = touch; touch = null;
+  if (tc.dir !== 'h') return;
+  const w = app.querySelector('.pager')?.clientWidth || 1;
+  const v = tc.dx / (performance.now() - tc.t);          // px/ms
+  const idx = VIEWS.indexOf(S.view);
+  let next = idx;
+  if (tc.dx < -w * 0.22 || v < -0.45) next = Math.min(VIEWS.length - 1, idx + 1);
+  if (tc.dx > w * 0.22 || v > 0.45) next = Math.max(0, idx - 1);
+  dragDx = tc.dx;
+  if (VIEWS[next] === 'archive' && S.view !== 'archive') loadReports().then(() => setTimeout(render, 500)).catch(() => {});
+  S.view = VIEWS[next];
+  render();
+});
+
 function render() {
   if (!S.user) {
     app.innerHTML = viewLogin() + (S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : '');
     return;
   }
   const L = T();
-  const body = S.view === 'stamp' ? viewStamp() : S.view === 'week' ? viewWeek() : viewArchive();
   const tab = (v, l) => `<button class="${S.view === v ? 'on' : ''}" data-act="view" data-v="${v}">${l}</button>`;
   // Fokus/Scroll im Editor erhalten
   const active = document.activeElement?.dataset?.ed ? { ed: document.activeElement.dataset.ed, i: document.activeElement.dataset.i } : null;
   app.innerHTML = `
-  <header><img class="hlogo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" /><div>
+  <header class="glass-bar"><img class="hlogo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" /><div>
     <button class="icon" data-act="drawer" title="${L.calendar}" aria-label="${L.calendar}">${ICON.cal}</button>
     <button class="icon" data-act="settings" title="${L.settings}" aria-label="${L.settings}">${ICON.gear}</button>
     <button class="icon" data-act="logout" title="${L.logout}" aria-label="${L.logout}">${ICON.out}</button></div></header>
-  <main>${body}</main>
-  <nav>${tab('stamp', L.tabStamp)}${tab('week', L.tabWeek)}${tab('archive', L.tabArchive)}</nav>
+  <main><div class="pager">${VIEWS.map((v) => `<section class="page ${v === S.view ? 'active' : ''}"><div class="page-in">${viewOf(v)}</div></section>`).join('')}</div></main>
+  <nav><div class="tabbar glass"><span class="ind"></span>${tab('stamp', L.tabStamp)}${tab('week', L.tabWeek)}${tab('archive', L.tabArchive)}</div></nav>
   ${S.editor ? viewEditor() : ''}
   ${S.drawer ? viewDrawer() : ''}
   ${S.settings ? viewSettings() : ''}
   ${S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : ''}`;
+  if (enterAnim) { app.querySelectorAll(enterAnim === 'drawer' ? '.drawer, .drawer-bg' : '.sheet, .modal').forEach((e) => e.classList.add('enter')); enterAnim = null; }
+  animateAfterRender();
   if (active) app.querySelector(`[data-ed="${active.ed}"][data-i="${active.i}"]`)?.focus();
 }
 
@@ -644,7 +722,7 @@ app.addEventListener('click', async (e) => {
   else if (a === 'out') stamp(todayInfo().st.state === 'break' ? ['break_end', 'out'] : ['out']);
   else if (a === 'pause') stamp(['break_start']);
   else if (a === 'pause_end') stamp(['break_end']);
-  else if (a === 'view') { S.view = el.dataset.v; if (S.view === 'archive') loadReports().then(render); render(); }
+  else if (a === 'view') { S.view = el.dataset.v; if (S.view === 'archive') loadReports().then(() => setTimeout(render, 500)).catch(() => {}); render(); }
   else if (a === 'wprev') { S.weekMonday = addDays(S.weekMonday, -7); render(); }
   else if (a === 'wnext') { S.weekMonday = addDays(S.weekMonday, 7); render(); }
   else if (a === 'edit') openEditor(el.dataset.day);
@@ -656,7 +734,7 @@ app.addEventListener('click', async (e) => {
   }
   else if (a === 'edrm') { S.editor.rows.splice(+el.dataset.i, 1); render(); }
   else if (a === 'edsave') saveEditor();
-  else if (a === 'drawer') { S.drawer = !S.drawer; render(); }
+  else if (a === 'drawer') { S.drawer = !S.drawer; if (S.drawer) enterAnim = 'drawer'; render(); }
   else if (a === 'cprev') { if (--S.calMonth < 0) { S.calMonth = 11; S.calYear--; } render(); }
   else if (a === 'cnext') { if (++S.calMonth > 11) { S.calMonth = 0; S.calYear++; } render(); }
   else if (a === 'abs') toggleAbsence(el.dataset.day);
@@ -665,7 +743,7 @@ app.addEventListener('click', async (e) => {
   else if (a === 'arch') { S.archTab = el.dataset.v; render(); }
   else if (a === 'rep') periodPdf(el.dataset.k);
   else if (a === 'pt') { S.chartSel = +el.dataset.i; render(); }
-  else if (a === 'settings') { S.settings = true; render(); }
+  else if (a === 'settings') { S.settings = true; enterAnim = 'sheet'; render(); }
   else if (a === 'setclose') { S.settings = false; render(); }
   else if (a === 'push') togglePush();
   else if (a === 'pref') { setPref(el.dataset.k, el.dataset.v); render(); }
