@@ -91,7 +91,8 @@ export async function buildWeekPdf(w, saldo, logo = null) {
       has ? fmtMin(d.pause) + star(d.manualPause) + (d.autoPause ? (anyAuto = true, '†') : '') : '',
       d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : ''),
     ];
-    const notes = [d.label, d.incomplete ? 'Ausstempeln fehlt' : null].filter(Boolean).join(', ');
+    const notes = [d.label, d.bonus ? `+${Math.round(d.rate * 100)} % (+${fmtMin(d.bonus)})` : null,
+      d.incomplete ? 'Ausstempeln fehlt' : null].filter(Boolean).join(', ');
     vals.push(notes);
     cols.forEach((c, j) => text(vals[j], c.x, y, { size: 9.5, align: c.a, color: i >= 5 && !has ? C.muted : C.text }));
     hline(y - 7);
@@ -121,6 +122,7 @@ export async function buildWeekPdf(w, saldo, logo = null) {
   if (anyManual) notes.push('* manuell korrigiert');
   if (anyAuto) notes.push('† Pause auf gesetzliches Minimum erhöht (ArG Art. 15)');
   notes.push('Feiertage, Ferien und Krankheit werden mit der Tagessollzeit gutgeschrieben.');
+  notes.push('Zuschlag als Zeitgutschrift: Samstag +25 %, Sonntag/Feiertag +50 %. Überstunden Mo–Fr 1:1.');
   for (const n of notes) { text(n, M, y, { size: 8.5, color: C.muted }); y -= 13; }
 
   text(`Erstellt am ${new Date().toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })}`, M, M - 10, { size: 8, color: C.muted });

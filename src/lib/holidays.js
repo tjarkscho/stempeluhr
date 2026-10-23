@@ -1,4 +1,4 @@
-// Gesetzliche Feiertage Kanton Waadt (VD). Werden automatisch mit 8:00 gutgeschrieben.
+// Freie Tage laut Arbeitsvertrag NPS (Feiertage + bezahlte freie Tage). Werden mit 8:00 gutgeschrieben.
 // Weicht der Firmenkalender ab: Liste hier anpassen.
 import { addDays } from './time.js';
 
@@ -29,9 +29,11 @@ export function holidaysOf(year) {
     [addDays(e, 1), 'Ostermontag'],
     [addDays(e, 39), 'Auffahrt'],
     [addDays(e, 50), 'Pfingstmontag'],
+    [`${year}-05-01`, 'Tag der Arbeit'], // laut Arbeitsvertrag bezahlt frei
     [`${year}-08-01`, 'Bundesfeier'],
     [jeune, 'Bettagsmontag'],
     [`${year}-12-25`, 'Weihnachten'],
+    [`${year}-12-26`, 'Stephanstag'], // laut Arbeitsvertrag bezahlt frei
   ]);
   cache.set(year, map);
   return map;

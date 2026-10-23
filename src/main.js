@@ -168,7 +168,7 @@ function viewWeek() {
       <td>${has ? hhmm(d.in) + mark(d.manualIn) : ''}</td>
       <td>${has ? (d.out ? hhmm(d.out) + mark(d.manualOut) : (d.open ? '…' : '<b class="neg">?</b>')) : ''}</td>
       <td>${has ? fmtMin(d.pause) + mark(d.manualPause) : ''}</td>
-      <td class="r"><b>${d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '')}</b>${d.label ? `<div class="tag">${esc(label(d.label))}</div>` : ''}</td>
+      <td class="r"><b>${d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '')}</b>${d.label ? `<div class="tag">${esc(label(d.label))}</div>` : ''}${d.bonus ? `<div class="tag">+${Math.round(d.rate * 100)} %</div>` : ''}</td>
     </tr>`;
   }).join('');
   const done = addDays(m, 6) < today;
@@ -187,7 +187,7 @@ function viewWeek() {
   </section>
   <div class="stats">
     <div><span>${L.target}</span><b>${fmtMin(w.soll)}</b></div>
-    <div><span>${L.actual}</span><b>${fmtMin(w.ist)}</b></div>
+    <div><span>${L.actual}</span><b>${fmtMin(w.ist)}</b>${w.bonus ? `<small class="sub2">${L.bonus} ${fmtMin(w.bonus)}</small>` : ''}</div>
     <div><span>${L.diff}${isCurrent ? ' ' + L.today : ''}</span><b class="${dw < 0 ? 'neg' : 'pos'}">${fmtMin(dw, true)}</b></div>
     <div><span>${L.balanceTotal}${isCurrent ? ' ' + L.today : ''}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b></div>
   </div>
@@ -470,4 +470,3 @@ sb.auth.onAuthStateChange((_ev, session) => {
   if (S.user && S.user.id !== was) loadAll();
   else render();
 });
-

@@ -134,8 +134,11 @@ export function weekStats(monday, byDay, absences, now = new Date(), sollUntil =
     const s = dayStats(byDay.get(day), day === today, now);
     const t = dayTargets(day, absences);
     const counted = day >= CONFIG.startDate; // vor Start: nur anzeigen, nicht zählen
-    const total = counted ? s.total + t.credit : 0;
-    days.push({ day, ...s, ...t, counted, dayTotal: counted ? total : s.total });
+    // Zuschlag: Samstag +25 %, Sonntag/Feiertag +50 % (als Zeitgutschrift)
+    const rate = i === 6 || holidayName(day) ? CONFIG.surcharge.sunday : i === 5 ? CONFIG.surcharge.saturday : 0;
+    const bonus = counted && !s.open ? Math.round(s.total * rate) : 0;
+    const total = counted ? s.total + t.credit + bonus : 0;
+    days.push({ day, ...s, ...t, counted, rate, bonus, dayTotal: counted ? total : s.total });
     soll += t.soll;
     ist += total;
     // "Stand heute": vergangene Tage + heute, sobald ausgestempelt oder abwesend
@@ -144,7 +147,8 @@ export function weekStats(monday, byDay, absences, now = new Date(), sollUntil =
     if (counts) { sollToDate += t.soll; istToDate += total; }
   }
   const { year, week } = isoWeek(monday);
-  return { monday, sunday: addDays(monday, 6), year, week, days, soll, ist, diff: ist - soll, diffToDate: istToDate - sollToDate };
+  const bonus = days.reduce((a, d) => a + d.bonus, 0);
+  return { bonus, monday, sunday: addDays(monday, 6), year, week, days, soll, ist, diff: ist - soll, diffToDate: istToDate - sollToDate };
 }
 
 /** Kumulierter Saldo vom Startdatum bis inkl. Woche `monday` (laufende Woche: Soll nur bis heute) */

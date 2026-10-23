@@ -68,3 +68,18 @@ console.log('Starttag-Test OK');
   assert.equal(w2.diffToDate, 0);
   console.log('Differenz-bis-heute-Test OK');
 }
+
+// Zuschläge + freie Tage laut Vertrag
+{
+  const now2 = new Date('2026-11-20T10:00:00Z');
+  const e = [
+    ...ev('2026-11-07', [['in', '08:00'], ['out', '12:00']]), // Sa 4:00 -> +1:00
+    ...ev('2026-11-08', [['in', '08:00'], ['out', '12:00']]), // So 4:00 -> +2:00
+  ];
+  const w = weekStats('2026-11-02', groupByDay(e), new Map(), now2);
+  assert.equal(w.days[5].bonus, 60); assert.equal(w.days[6].bonus, 120);
+  assert.equal(w.ist, 240 + 60 + 240 + 120); assert.equal(w.bonus, 180);
+  const h = holidaysOf(2027);
+  assert.ok(h.has('2027-05-01') && h.has('2027-12-26'));
+  console.log('Zuschlag-Test OK');
+}
