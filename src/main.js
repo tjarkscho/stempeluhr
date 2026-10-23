@@ -414,9 +414,15 @@ async function periodPdf(key) {
 }
 
 async function download(path) {
-  const { data, error } = await sb.storage.from('reports').createSignedUrl(path, 120, { download: path.split('/').pop() });
-  if (error) return toast(T().downloadFailed + error.message, true);
-  window.location.href = data.signedUrl;
+  if (S.busy) return;
+  S.busy = true; render();
+  try {
+    const { data, error } = await sb.storage.from('reports').download(path);
+    if (error) throw error;
+    const bytes = new Uint8Array(await data.arrayBuffer());
+    S.busy = false; render();
+    await saveFile(bytes, `Arbeitszeitnachweis_${path.split('/').pop()}`);
+  } catch (e) { S.busy = false; render(); toast(T().downloadFailed + (e.message || e), true); }
 }
 
 let logoCache;
