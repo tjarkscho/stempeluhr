@@ -1,15 +1,16 @@
-// Wochen-PDF (läuft im Browser und in Node)
+// Wochen-PDF (läuft im Browser und in Node) – ruhiges, reduziertes Layout
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { CONFIG } from '../config.js';
 import { hhmm, fmtDate, fmtMin, DAY_NAMES } from './time.js';
 
 const C = {
-  text: rgb(0.1, 0.1, 0.12),
-  muted: rgb(0.42, 0.44, 0.48),
-  line: rgb(0.8, 0.81, 0.84),
-  head: rgb(0.93, 0.94, 0.95),
-  weekend: rgb(0.97, 0.97, 0.98),
-  accent: rgb(0.08, 0.32, 0.55),
+  text: rgb(0.11, 0.12, 0.14),
+  muted: rgb(0.48, 0.5, 0.54),
+  faint: rgb(0.72, 0.73, 0.76),
+  line: rgb(0.88, 0.89, 0.91),
+  band: rgb(0.965, 0.968, 0.975),
+  pos: rgb(0.1, 0.45, 0.25),
+  neg: rgb(0.68, 0.16, 0.13),
 };
 
 /**
@@ -22,98 +23,94 @@ export async function buildWeekPdf(w, saldo, logo = null) {
   const doc = await PDFDocument.create();
   doc.setTitle(`Arbeitszeitnachweis KW ${w.week} ${w.year}`);
   doc.setAuthor(CONFIG.employee);
-  const page = doc.addPage([595.28, 841.89]); // A4
+  const W = 595.28, H = 841.89, M = 56;
+  const page = doc.addPage([W, H]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const W = 595.28, M = 50;
-  let y = 841.89 - M;
 
-  const text = (s, x, yy, { f = font, size = 10, color = C.text, align = 'left' } = {}) => {
+  const text = (s, x, y, { f = font, size = 9.5, color = C.text, align = 'left' } = {}) => {
     const tw = f.widthOfTextAtSize(s, size);
     const xx = align === 'right' ? x - tw : align === 'center' ? x - tw / 2 : x;
-    page.drawText(s, { x: xx, y: yy, size, font: f, color });
+    page.drawText(s, { x: xx, y, size, font: f, color });
   };
-  const hline = (yy, x1 = M, x2 = W - M, t = 0.6, color = C.line) =>
-    page.drawLine({ start: { x: x1, y: yy }, end: { x: x2, y: yy }, thickness: t, color });
+  const hline = (y, t = 0.5, color = C.line, x1 = M, x2 = W - M) =>
+    page.drawLine({ start: { x: x1, y }, end: { x: x2, y }, thickness: t, color });
+  const signed = (m) => (m < 0 ? C.neg : m > 0 ? C.pos : C.text);
 
-  // ---- Kopf: Logo links, Titel rechts ----
-  const headTop = y;
+  // ---- Kopf ----
+  let y = H - M;
   if (logo) {
     try {
       const isPng = logo[0] === 0x89 && logo[1] === 0x50;
       const img = isPng ? await doc.embedPng(logo) : await doc.embedJpg(logo);
-      const maxH = 48, maxW = 200;
-      const s = Math.min(maxH / img.height, maxW / img.width);
-      page.drawImage(img, { x: M, y: headTop - img.height * s, width: img.width * s, height: img.height * s });
+      const s = Math.min(34 / img.height, 160 / img.width);
+      page.drawImage(img, { x: M, y: y - img.height * s, width: img.width * s, height: img.height * s });
     } catch { /* Logo ungültig -> weglassen */ }
   }
-  text('Arbeitszeitnachweis', W - M, headTop - 18, { f: bold, size: 18, align: 'right' });
-  text(`KW ${w.week} / ${w.year}`, W - M, headTop - 34, { size: 11, color: C.accent, f: bold, align: 'right' });
-  text(`${fmtDate(w.monday)} – ${fmtDate(w.sunday)}`, W - M, headTop - 48, { size: 10, color: C.muted, align: 'right' });
-  y = headTop - 70;
-  hline(y, M, W - M, 1.2, C.accent);
+  text('ARBEITSZEITNACHWEIS', W - M, y - 10, { f: bold, size: 8, color: C.muted, align: 'right' });
+  text(`KW ${w.week}`, W - M, y - 34, { f: bold, size: 22, align: 'right' });
+  y -= 62;
+  text(`${fmtDate(w.monday)} – ${fmtDate(w.sunday)}`, W - M, y + 8, { size: 9, color: C.muted, align: 'right' });
 
-  // ---- Stammdaten ----
-  y -= 24;
-  const info = [['Mitarbeiter', CONFIG.employee], ['Firma', CONFIG.company], ['Sollzeit', `${fmtMin(CONFIG.sollDayMin * 5)} h / Woche (Mo–Fr)`]];
-  for (const [k, v] of info) {
-    text(k, M, y, { color: C.muted });
-    text(v, M + 90, y, { f: bold });
-    y -= 16;
-  }
+  // ---- Stammdaten in einer Zeile ----
+  y -= 22;
+  const meta = [['Mitarbeiter', CONFIG.employee], ['Firma', CONFIG.company], ['Sollzeit', `${fmtMin(CONFIG.sollDayMin * 5)} h / Woche`]];
+  const colW = (W - 2 * M) / 3;
+  meta.forEach(([k, v], i) => {
+    text(k.toUpperCase(), M + i * colW, y, { size: 7, color: C.muted, f: bold });
+    text(v, M + i * colW, y - 14, { size: 10 });
+  });
+  y -= 34;
+  hline(y);
 
   // ---- Tabelle ----
-  y -= 14;
-  const cols = [
-    { h: 'Tag', x: M + 6, a: 'left' },
-    { h: 'Datum', x: M + 86, a: 'left' },
-    { h: 'Ein', x: M + 196, a: 'right' },
-    { h: 'Aus', x: M + 246, a: 'right' },
-    { h: 'Pause', x: M + 300, a: 'right' },
-    { h: 'Total', x: M + 354, a: 'right' },
-    { h: 'Bemerkung', x: M + 372, a: 'left' },
-  ];
-  const rowH = 22;
-  page.drawRectangle({ x: M, y: y - 7, width: W - 2 * M, height: rowH, color: C.head });
-  for (const c of cols) text(c.h, c.x, y, { f: bold, size: 9.5, align: c.a });
-  y -= rowH;
+  y -= 26;
+  const X = { day: M, date: M + 78, in: M + 190, out: M + 240, pause: M + 296, total: M + 350, note: M + 370 };
+  const head = [['Tag', X.day, 'left'], ['Datum', X.date, 'left'], ['Ein', X.in, 'right'], ['Aus', X.out, 'right'],
+    ['Pause', X.pause, 'right'], ['Total', X.total, 'right'], ['Bemerkung', X.note, 'left']];
+  for (const [h, x, a] of head) text(h.toUpperCase(), x, y, { size: 7, f: bold, color: C.muted, align: a });
+  y -= 10;
+  hline(y, 0.8, C.faint);
 
+  const rowH = 24;
   let anyManual = false, anyAuto = false;
   for (const [i, d] of w.days.entries()) {
-    if (i >= 5) page.drawRectangle({ x: M, y: y - 7, width: W - 2 * M, height: rowH, color: C.weekend });
-    const has = !!d.in;
-    const star = (b) => (b ? (anyManual = true, '*') : '');
-    const vals = [
-      DAY_NAMES[i],
-      fmtDate(d.day),
-      has ? hhmm(d.in) + star(d.manualIn) : '',
-      has ? (d.out ? hhmm(d.out) + star(d.manualOut) : '?') : '',
-      has ? fmtMin(d.pause) + star(d.manualPause) + (d.autoPause ? (anyAuto = true, '†') : '') : '',
-      d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : ''),
-    ];
-    const notes = [d.label, d.bonus ? `+${Math.round(d.rate * 100)} % (+${fmtMin(d.bonus)})` : null,
-      d.incomplete ? 'Ausstempeln fehlt' : null].filter(Boolean).join(', ');
-    vals.push(notes);
-    cols.forEach((c, j) => text(vals[j], c.x, y, { size: 9.5, align: c.a, color: i >= 5 && !has ? C.muted : C.text }));
-    hline(y - 7);
     y -= rowH;
+    const has = !!d.in;
+    const weekend = i >= 5;
+    if (weekend && !has) {
+      text(DAY_NAMES[i], X.day, y + 8, { color: C.faint });
+      text(fmtDate(d.day), X.date, y + 8, { color: C.faint });
+      continue;
+    }
+    const star = (b) => (b ? (anyManual = true, '*') : '');
+    text(DAY_NAMES[i], X.day, y + 8);
+    text(fmtDate(d.day), X.date, y + 8, { color: C.muted });
+    if (has) {
+      text(hhmm(d.in) + star(d.manualIn), X.in, y + 8, { align: 'right' });
+      text(d.out ? hhmm(d.out) + star(d.manualOut) : '–', X.out, y + 8, { align: 'right' });
+      text(fmtMin(d.pause) + star(d.manualPause) + (d.autoPause ? (anyAuto = true, '†') : ''), X.pause, y + 8, { align: 'right', color: C.muted });
+    }
+    const tot = d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '');
+    text(tot, X.total, y + 8, { align: 'right', f: bold });
+    const notes = [d.label, d.bonus ? `+${Math.round(d.rate * 100)} % (+${fmtMin(d.bonus)})` : null,
+      d.incomplete ? 'Ausstempeln fehlt' : null].filter(Boolean).join(' · ');
+    if (notes) text(notes, X.note, y + 8, { size: 8.5, color: C.muted });
+    hline(y, 0.4);
   }
 
-  // Wochentotal
-  y -= 2;
-  text('Wochentotal', cols[0].x, y, { f: bold, size: 10.5 });
-  text(fmtMin(w.ist), cols[5].x, y, { f: bold, size: 10.5, align: 'right' });
-  hline(y - 8, M, W - M, 1.2, C.text);
-
-  // ---- Drei Felder ----
-  y -= 80;
-  const boxes = [['Soll', fmtMin(w.soll)], ['Differenz', fmtMin(w.diff, true)], ['Saldo total', fmtMin(saldo, true)]];
-  const gap = 12, bw = (W - 2 * M - 2 * gap) / 3, bh = 50;
-  boxes.forEach(([k, v], i) => {
-    const x = M + i * (bw + gap);
-    page.drawRectangle({ x, y, width: bw, height: bh, borderColor: C.line, borderWidth: 1 });
-    text(k, x + 12, y + bh - 17, { size: 9, color: C.muted });
-    text(v, x + 12, y + 12, { f: bold, size: 16, color: i === 2 ? C.accent : C.text });
+  // ---- Zusammenfassung: ein ruhiges Band (Ist = Wochentotal) ----
+  y -= 30 + 58;
+  const bandH = 58;
+  page.drawRectangle({ x: M, y, width: W - 2 * M, height: bandH, color: C.band });
+  const cells = [['Soll', fmtMin(w.soll), C.text], ['Ist', fmtMin(w.ist), C.text],
+    ['Differenz', fmtMin(w.diff, true), signed(w.diff)], ['Saldo total', fmtMin(saldo, true), signed(saldo)]];
+  const cw = (W - 2 * M) / cells.length;
+  cells.forEach(([k, v, col], i) => {
+    const x = M + 16 + i * cw;
+    text(k.toUpperCase(), x, y + bandH - 20, { size: 7, f: bold, color: C.muted });
+    text(v, x, y + 14, { size: 17, f: bold, color: col });
+    if (i) page.drawLine({ start: { x: M + i * cw, y: y + 12 }, end: { x: M + i * cw, y: y + bandH - 12 }, thickness: 0.5, color: C.line });
   });
 
   // ---- Fussnoten ----
@@ -121,11 +118,13 @@ export async function buildWeekPdf(w, saldo, logo = null) {
   const notes = [];
   if (anyManual) notes.push('* manuell korrigiert');
   if (anyAuto) notes.push('† Pause auf gesetzliches Minimum erhöht (ArG Art. 15)');
-  notes.push('Feiertage, Ferien und Krankheit werden mit der Tagessollzeit gutgeschrieben.');
-  notes.push('Zuschlag als Zeitgutschrift: Samstag +25 %, Sonntag/Feiertag +50 %. Überstunden Mo–Fr 1:1.');
-  for (const n of notes) { text(n, M, y, { size: 8.5, color: C.muted }); y -= 13; }
+  notes.push('Feiertage, Ferien und Krankheit mit Tagessoll gutgeschrieben · Zuschlag als Zeit: Sa +25 %, So/Feiertag +50 % · Überstunden Mo–Fr 1:1');
+  for (const n of notes) { text(n, M, y, { size: 7.5, color: C.muted }); y -= 12; }
 
-  text(`Erstellt am ${new Date().toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })}`, M, M - 10, { size: 8, color: C.muted });
+  // ---- Fusszeile ----
+  hline(M - 6, 0.4);
+  text(`${CONFIG.employee} · ${CONFIG.company}`, M, M - 20, { size: 7.5, color: C.faint });
+  text(`Erstellt am ${new Date().toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })}`, W - M, M - 20, { size: 7.5, color: C.faint, align: 'right' });
 
   return doc.save();
 }

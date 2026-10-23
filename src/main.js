@@ -51,6 +51,7 @@ const ICON = {
   trash: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
   download: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   warn: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>',
+  cloud: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5H7z"/><path d="M4 4l16 16"/></svg>',
   out: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 16l-4-4 4-4M5 12h10"/></svg>',
 };
 
@@ -62,6 +63,41 @@ function toast(msg, err = false) {
 }
 
 // ---------------- Daten ----------------
+// ---------------- Offline: Cache + Warteschlange ----------------
+const QKEY = 'stempeluhr.queue', CKEY = 'stempeluhr.cache';
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* voll/gesperrt */ } };
+const isNetErr = (e) => !navigator.onLine || /fetch|network|load failed|timeout/i.test(e?.message || String(e));
+
+function queue() { return lsGet(QKEY, []); }
+function setEntries(serverRows) {
+  // ausstehende Offline-Stempel sichtbar mitführen
+  const pending = queue().map((r, i) => ({ id: `q${i}`, ...r, manual: false, pending: true }));
+  S.entries = [...serverRows, ...pending].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+  S.byDay = groupByDay(S.entries);
+}
+function saveCache() {
+  lsSet(CKEY, { entries: S.entries.filter((e) => !e.pending), absences: [...S.absences], reports: S.reports });
+}
+function loadCache() {
+  const c = lsGet(CKEY, null);
+  if (!c) return false;
+  setEntries(c.entries || []); S.absences = new Map(c.absences || []); S.reports = c.reports || [];
+  return true;
+}
+let flushing = false;
+async function flushQueue() {
+  const q = queue();
+  if (!q.length || flushing || !navigator.onLine) return;
+  flushing = true;
+  const { error } = await sb.from('entries').insert(q);
+  flushing = false;
+  if (error) return;
+  lsSet(QKEY, []);
+  await loadEntries().catch(() => {});
+  toast(T().synced(q.length));
+}
+
 async function loadEntries() {
   const all = [];
   for (let from = 0; ; from += 1000) {
@@ -70,13 +106,14 @@ async function loadEntries() {
     all.push(...data);
     if (data.length < 1000) break;
   }
-  S.entries = all;
-  S.byDay = groupByDay(all);
+  setEntries(all);
+  saveCache();
 }
 async function loadAbsences() {
   const { data, error } = await sb.from('absences').select('day,kind');
   if (error) throw error;
   S.absences = new Map(data.map((a) => [a.day, a.kind]));
+  saveCache();
 }
 async function loadReports() {
   const { data, error } = await sb.from('weekly_reports').select('*').order('week_start', { ascending: false });
@@ -84,8 +121,10 @@ async function loadReports() {
   S.reports = data;
 }
 async function loadAll() {
-  try { await Promise.all([loadEntries(), loadAbsences(), loadReports()]); }
-  catch (e) { toast(T().loadFailed + e.message, true); }
+  loadCache(); render();                      // sofort aus dem Cache anzeigen
+  await flushQueue();
+  try { await Promise.all([loadEntries(), loadAbsences(), loadReports()]); saveCache(); }
+  catch (e) { if (!isNetErr(e)) toast(T().loadFailed + e.message, true); }
   render();
 }
 
@@ -107,11 +146,21 @@ async function stamp(kinds) {
   S.busy = true; render();
   const ts = new Date();
   const rows = kinds.map((kind, i) => ({ kind, ts: new Date(ts.getTime() + i * 1000).toISOString() }));
-  const { error } = await sb.from('entries').insert(rows);
+  let error = null;
+  if (navigator.onLine && !queue().length) {
+    try { ({ error } = await sb.from('entries').insert(rows)); } catch (e) { error = e; }
+  } else error = new Error('offline');
   S.busy = false;
-  if (error) return toast(T().error + error.message, true);
+  if (error && !isNetErr(error) && error.message !== 'offline') return toast(T().error + error.message, true);
   if (navigator.vibrate) navigator.vibrate(40);
-  await loadEntries();
+  if (error) {
+    // offline -> lokal merken, später hochladen
+    lsSet(QKEY, [...queue(), ...rows]);
+    setEntries(S.entries.filter((e) => !e.pending));
+    render();
+    return toast(`${T().kind[kinds[kinds.length - 1]]} ${hhmm(ts)} · ${T().offlineSaved}`);
+  }
+  await loadEntries().catch(() => {});
   toast(`${T().kind[kinds[kinds.length - 1]]} ${hhmm(ts)}`);
 }
 
@@ -131,7 +180,9 @@ function viewStamp() {
     <button class="big go" data-act="pause_end" ${S.busy ? 'disabled' : ''}>${L.pauseEnd}</button>
     <button class="big stop" data-act="out" ${S.busy ? 'disabled' : ''}>${L.clockOut}</button>`;
 
+  const pend = queue().length;
   return `
+  ${pend ? `<div class="offline">${ICON.cloud}<span>${T().pending(pend)}</span></div>` : ''}
   ${forgot ? `<div class="warn" data-act="edit" data-day="${forgot}">${ICON.warn}<span>${L.forgot(fmtDate(forgot))}</span></div>` : ''}
   <section class="card hero">
     <div class="state s-${st.state}"><span class="dot"></span>${stateTxt}</div>
@@ -249,6 +300,7 @@ async function generatePdf(monday) {
 // ---------------- Tageskorrektur ----------------
 function openEditor(day) {
   const events = S.byDay.get(day) || [];
+  if (events.some((e) => e.pending) || !navigator.onLine) return toast(T().offlineEdit, true);
   S.editor = { day, rows: events.map((e) => ({ id: e.id, kind: e.kind, time: hhmm(new Date(e.ts)), orig: e })) };
   render();
 }
@@ -375,6 +427,10 @@ function prefsControls() {
       `<button type="button" class="sw sw-${th} ${prefs.theme === th ? 'on' : ''}" data-act="pref" data-k="theme" data-v="${th}"><i></i>${L.themes[th]}</button>`).join('')}</div>
     <span class="plabel">${L.language}</span>
     ${seg('lang', ['de', 'fr'], (v) => v.toUpperCase())}
+    ${S.user ? `<span class="plabel">${L.reminder}</span>
+    <button type="button" class="toggle ${S.pushOn ? 'on' : ''}" data-act="push" ${S.busy ? 'disabled' : ''}>
+      <span>${L.reminderText}</span><i></i></button>
+    ${S.pushHint ? `<p class="hint">${esc(S.pushHint)}</p>` : ''}` : ''}
   </div>`;
 }
 
@@ -456,13 +512,55 @@ app.addEventListener('click', async (e) => {
   else if (a === 'dl') download(el.dataset.path);
   else if (a === 'settings') { S.settings = true; render(); }
   else if (a === 'setclose') { S.settings = false; render(); }
+  else if (a === 'push') togglePush();
   else if (a === 'pref') { setPref(el.dataset.k, el.dataset.v); render(); }
   else if (a === 'logout') { await sb.auth.signOut(); }
 });
 
 // Uhr aktualisieren
 setInterval(() => { if (S.user && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings) render(); }, 30000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.user) loadEntries().then(render); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && S.user) flushQueue().then(() => loadEntries()).then(render).catch(() => render());
+});
+window.addEventListener('online', () => { if (S.user) flushQueue().then(render); });
+window.addEventListener('offline', () => render());
+
+// ---------------- Service Worker + Push ----------------
+const FN_URL = `${URL_}/functions/v1/reminder`;
+let swReg = null;
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).then((r) => { swReg = r; refreshPushState(); }).catch(() => {});
+}
+async function refreshPushState() {
+  try { S.pushOn = !!(await swReg?.pushManager?.getSubscription()); } catch { S.pushOn = false; }
+}
+const b64ToU8 = (b64) => { const s = atob((b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, (c) => c.charCodeAt(0)); };
+async function togglePush() {
+  const L = T();
+  S.pushHint = null;
+  if (!swReg || !('PushManager' in window) || !('Notification' in window)) {
+    S.pushHint = /iphone|ipad/i.test(navigator.userAgent) ? L.pushIos : L.pushUnsupported; return render();
+  }
+  S.busy = true; render();
+  try {
+    const existing = await swReg.pushManager.getSubscription();
+    if (existing) {
+      await sb.from('push_subs').delete().eq('endpoint', existing.endpoint);
+      await existing.unsubscribe();
+      S.pushOn = false;
+    } else {
+      if (await Notification.requestPermission() !== 'granted') throw new Error(L.pushDenied);
+      const { key } = await (await fetch(`${FN_URL}?action=key`)).json();
+      const sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(key) });
+      const j = sub.toJSON();
+      const { error } = await sb.from('push_subs').upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' });
+      if (error) throw error;
+      S.pushOn = true;
+      toast(L.pushOk);
+    }
+  } catch (e) { S.pushHint = e.message; }
+  S.busy = false; render();
+}
 
 sb.auth.onAuthStateChange((_ev, session) => {
   const was = S.user?.id;

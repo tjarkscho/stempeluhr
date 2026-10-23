@@ -164,3 +164,15 @@ header .icon:hover { color: var(--text); }
 header .icon svg { display: block; }
 
 .sub2 { display: block; font-size: 12px; color: var(--muted); }
+
+/* Offline-Hinweis */
+.offline { background: var(--ft); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 14px;
+  display: flex; gap: 10px; align-items: center; color: var(--muted); }
+.offline svg { flex: none; }
+/* Schalter */
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--bg); cursor: pointer; text-align: left; }
+.toggle i { flex: none; width: 42px; height: 24px; border-radius: 12px; background: var(--line); position: relative; transition: background .2s; }
+.toggle i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .2s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.toggle.on i { background: var(--go); }
+.toggle.on i::after { left: 21px; }
