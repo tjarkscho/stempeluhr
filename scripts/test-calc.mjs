@@ -83,3 +83,16 @@ console.log('Starttag-Test OK');
   assert.ok(h.has('2027-05-01') && h.has('2027-12-26'));
   console.log('Zuschlag-Test OK');
 }
+
+// Monat/Zeitraum + Saldo
+{
+  const { rangeStats, saldoAt } = await import('../src/lib/calc.js');
+  const e = [...ev('2026-10-22', [['in', '06:26'], ['out', '15:24']]), ...ev('2026-10-23', [['in', '06:11'], ['out', '15:05']])];
+  const by2 = groupByDay(e);
+  const n = new Date('2026-10-23T20:00:00Z');
+  const m = rangeStats('2026-10-01', '2026-10-31', by2, new Map(), n);
+  assert.equal(m.soll, 960); assert.equal(m.ist, 1012); assert.equal(m.diff, 52); assert.ok(m.partial);
+  assert.equal(saldoAt('2026-10-31', by2, new Map(), n), 52);
+  assert.equal(saldoAt('2026-10-21', by2, new Map(), n), 0);
+  console.log('Monats-Test OK');
+}

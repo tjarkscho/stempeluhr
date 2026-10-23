@@ -7,7 +7,7 @@ import {
 } from './lib/time.js';
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
-import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay } from './lib/calc.js';
+import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt } from './lib/calc.js';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -34,6 +34,8 @@ const S = {
   calMonth: +dayKey(new Date()).slice(5, 7) - 1,
   drawer: false,
   settings: false,
+  archTab: 'weeks',
+  chartSel: null,
   editor: null,   // { day, rows: [{id?, kind, time}] }
   busy: false,
   toast: null,
@@ -164,6 +166,15 @@ async function stamp(kinds) {
   toast(`${T().kind[kinds[kinds.length - 1]]} ${hhmm(ts)}`);
 }
 
+/** Differenz des noch laufenden heutigen Tages (0, wenn nicht eingestempelt) */
+function liveToday(now = new Date()) {
+  const today = dayKey(now);
+  const st = dayStats(S.byDay.get(today) || [], true, now);
+  if (!st.open || today < CONFIG.startDate) return 0;
+  const t = dayTargets(today, S.absences);
+  return st.total + t.credit - t.soll;
+}
+
 function viewStamp() {
   const { today, st, forgot } = todayInfo();
   const t = dayTargets(today, S.absences);
@@ -193,7 +204,7 @@ function viewStamp() {
   ${forgot ? `<div class="warn" data-act="edit" data-day="${forgot}">${ICON.warn}<span>${L.forgot(fmtDate(forgot))}</span></div>` : ''}
   <section class="card hero">
     <div class="state s-${st.state}"><span class="dot"></span>${stateTxt}</div>
-    <div class="clock">${fmtMin(st.total)}</div>
+    ${ring(st.total, Math.max(0, t.soll - t.credit), L)}
     <div class="sub">${L.workedToday}${t.label ? ` · ${esc(label(t.label))}` : ''}</div>
     <div class="facts">
       <div><span>${L.in}</span><b>${st.in ? hhmm(st.in) : '–'}</b></div>
@@ -219,9 +230,10 @@ function viewWeek() {
   const m = S.weekMonday;
   const isCurrent = m === mondayOf(today);
   const w = weekStats(m, S.byDay, S.absences, now, isCurrent ? today : null);
-  const saldo = saldoThrough(m, S.byDay, S.absences, now);
-  // laufende Woche: Differenz nur bis heute (sonst stünde das Soll der restlichen Tage als Minus da)
-  const dw = isCurrent ? w.diffToDate : w.diff;
+  // laufende Woche: Differenz nur bis jetzt (heute live) – gleiche Werte wie auf der Stempel-Seite
+  const live = liveToday(now);
+  const saldo = saldoThrough(m, S.byDay, S.absences, now) + (m >= mondayOf(today) ? live : 0);
+  const dw = isCurrent ? w.diffToDate + live : w.diff;
   const rows = w.days.map((d, i) => {
     const has = !!d.in;
     const cls = [i >= 5 ? 'we' : '', d.day === today ? 'today' : '', d.day < CONFIG.startDate ? 'pre' : ''].join(' ');
@@ -254,6 +266,7 @@ function viewWeek() {
     <div><span>${L.diffWeek}</span><b class="${dw < 0 ? 'neg' : 'pos'}">${fmtMin(dw, true)}</b>${isCurrent ? `<small class="sub2">${L.untilToday}</small>` : ''}</div>
     <div><span>${L.balanceTotal}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b><small class="sub2">${L.since(fmtDate(CONFIG.startDate))}</small></div>
   </div>
+  ${saldoChart(L, now)}
   <p class="hint">${L.weekHint}</p>
   ${done && addDays(m, 6) >= CONFIG.startDate ? `<button class="btn" data-act="genpdf" ${S.busy ? 'disabled' : ''}>${rep ? L.pdfRemake : L.pdfMake}</button>` : ''}
   ${rep ? `<button class="btn ghost" data-act="dl" data-path="${esc(rep.pdf_path)}">${L.pdfDownload}</button>` : ''}`;
@@ -262,13 +275,140 @@ function viewWeek() {
 // ---------------- Archiv ----------------
 function viewArchive() {
   const L = T();
-  if (!S.reports.length) return `<section class="card"><p>${L.archiveEmpty}</p></section>`;
-  return `<section class="card pad0"><ul class="list">${S.reports.map((r) => `
+  const tab = (v, l) => `<button type="button" class="${S.archTab === v ? 'on' : ''}" data-act="arch" data-v="${v}">${l}</button>`;
+  const tabs = `<div class="seg seg3">${tab('weeks', L.archWeeks)}${tab('months', L.archMonths)}${tab('years', L.archYears)}</div>`;
+  if (S.archTab === 'months' || S.archTab === 'years') return tabs + viewPeriods(L);
+  if (!S.reports.length) return tabs + `<section class="card"><p>${L.archiveEmpty}</p></section>`;
+  return tabs + `<section class="card pad0"><ul class="list">${S.reports.map((r) => `
     <li data-act="dl" data-path="${esc(r.pdf_path)}">
       <div><b>${L.week} ${r.week} / ${r.year}</b><small>${fmtDate(r.week_start)} – ${fmtDate(addDays(r.week_start, 6))}</small></div>
       <div class="r"><span class="${r.diff < 0 ? 'neg' : 'pos'}">${fmtMin(r.diff, true)}</span><small>${L.balance} ${fmtMin(r.saldo, true)}</small></div>
       <span class="dl">${ICON.download}</span>
     </li>`).join('')}</ul></section>`;
+}
+
+// ---------------- Ring ----------------
+function ring(worked, target, L) {
+  const R = 84, CIRC = 2 * Math.PI * R;
+  const ref = target > 0 ? target : CONFIG.sollDayMin;          // Wochenende/Feiertag: alles ist Überzeit
+  const base = target > 0 ? Math.min(worked / target, 1) : 0;
+  const over = Math.min(Math.max(0, worked - target) / ref, 1);
+  const arc = (f, cls) => (f > 0
+    ? `<circle class="${cls}" cx="100" cy="100" r="${R}" stroke-dasharray="${(f * CIRC).toFixed(1)} ${CIRC.toFixed(1)}"/>` : '');
+  const sub = target > 0
+    ? (worked > target ? `<b class="over">+${fmtMin(worked - target)}</b> ${L.overtime}` : `${L.of} ${fmtMin(target)}`)
+    : (worked ? `<b class="over">+${fmtMin(worked)}</b> ${L.overtime}` : L.noTarget);
+  return `<div class="ring" role="img" aria-label="${fmtMin(worked)} / ${fmtMin(target)}">
+    <svg viewBox="0 0 200 200"><g transform="rotate(-90 100 100)">
+      <circle class="r-track" cx="100" cy="100" r="${R}"/>
+      ${arc(base, 'r-base')}${arc(over, 'r-over')}
+    </g></svg>
+    <div class="ring-in"><div class="clock">${fmtMin(worked)}</div><div class="ring-sub">${sub}</div></div>
+  </div>`;
+}
+
+// ---------------- Saldo-Verlauf ----------------
+function saldoChart(L, now) {
+  const today = dayKey(now);
+  const pts = [];
+  for (let m = mondayOf(CONFIG.startDate); m <= mondayOf(today); m = addDays(m, 7)) {
+    const sun = addDays(m, 6);
+    pts.push({ wk: isoWeek(m).week, v: saldoAt(sun, S.byDay, S.absences, now) + (sun >= today ? liveToday(now) : 0) });
+  }
+  const P = pts.slice(-12);
+  const Wd = 320, Hd = 130, pl = 8, pr = 8, pt = 14, pb = 22;
+  const vals = P.map((p) => p.v);
+  const max = Math.max(60, ...vals), min = Math.min(-60, ...vals);
+  const X = (i) => pl + (P.length === 1 ? (Wd - pl - pr) / 2 : i * (Wd - pl - pr) / (P.length - 1));
+  const Y = (v) => pt + (max - v) * (Hd - pt - pb) / (max - min);
+  const y0 = Y(0);
+  const line = P.map((p, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(p.v).toFixed(1)}`).join(' ');
+  const area = P.length > 1 ? `${line} L${X(P.length - 1).toFixed(1)},${y0.toFixed(1)} L${X(0).toFixed(1)},${y0.toFixed(1)} Z` : '';
+  const sel = S.chartSel != null && S.chartSel < P.length ? S.chartSel : P.length - 1;
+  const step = Math.ceil(P.length / 6);
+  const pts_ = P.map((p, i) => `
+    <circle class="c-pt ${p.v < 0 ? 'neg' : 'pos'} ${i === sel ? 'sel' : ''}" cx="${X(i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="${i === sel ? 5 : 4}"/>
+    <rect class="c-hit" data-act="pt" data-i="${i}" x="${(X(i) - 14).toFixed(1)}" y="0" width="28" height="${Hd}"/>
+    ${i % step === 0 || i === P.length - 1 ? `<text class="c-x" x="${X(i).toFixed(1)}" y="${Hd - 6}" text-anchor="middle">${p.wk}</text>` : ''}`).join('');
+  const s = P[sel];
+  return `<section class="card chart">
+    <div class="chart-head"><span>${L.saldoTrend}</span><b class="${s.v < 0 ? 'neg' : 'pos'}">${L.week} ${s.wk}: ${fmtMin(s.v, true)}</b></div>
+    <svg viewBox="0 0 ${Wd} ${Hd}">
+      <defs>
+        <clipPath id="cpos"><rect x="0" y="0" width="${Wd}" height="${y0.toFixed(1)}"/></clipPath>
+        <clipPath id="cneg"><rect x="0" y="${y0.toFixed(1)}" width="${Wd}" height="${(Hd - y0).toFixed(1)}"/></clipPath>
+      </defs>
+      <line class="c-zero" x1="0" x2="${Wd}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}"/>
+      ${area ? `<path class="c-area pos" d="${area}" clip-path="url(#cpos)"/><path class="c-area neg" d="${area}" clip-path="url(#cneg)"/>` : ''}
+      ${P.length > 1 ? `<path class="c-line" d="${line}"/>` : ''}
+      ${pts_}
+    </svg>
+    ${P.length < 2 ? `<p class="hint">${L.chartSoon}</p>` : ''}
+  </section>`;
+}
+
+// ---------------- Monate / Jahre ----------------
+const lastOfMonth = (ym) => { const [y, m] = ym.split('-').map(Number); return addDays(`${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`, -1); };
+function viewPeriods(L) {
+  const now = new Date(), today = dayKey(now);
+  const items = [];
+  if (S.archTab === 'months') {
+    for (let ym = today.slice(0, 7); ym >= CONFIG.startDate.slice(0, 7);) {
+      const st = rangeStats(`${ym}-01`, lastOfMonth(ym), S.byDay, S.absences, now);
+      items.push({ key: ym, title: `${L.months[+ym.slice(5) - 1]} ${ym.slice(0, 4)}`, st, saldo: saldoAt(lastOfMonth(ym), S.byDay, S.absences, now) });
+      const [y, m] = ym.split('-').map(Number);
+      ym = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+    }
+  } else {
+    for (let y = +today.slice(0, 4); y >= +CONFIG.startDate.slice(0, 4); y--) {
+      const st = rangeStats(`${y}-01-01`, `${y}-12-31`, S.byDay, S.absences, now);
+      items.push({ key: String(y), title: String(y), st, saldo: saldoAt(`${y}-12-31`, S.byDay, S.absences, now) });
+    }
+  }
+  return `<section class="card pad0"><ul class="list">${items.map((it) => `
+    <li data-act="rep" data-k="${it.key}">
+      <div><b>${it.title}</b><small>${L.actual} ${fmtMin(it.st.ist)} · ${L.target} ${fmtMin(it.st.soll)}${it.st.partial ? ` · ${L.untilToday}` : ''}</small></div>
+      <div class="r"><span class="${it.st.diff < 0 ? 'neg' : 'pos'}">${fmtMin(it.st.diff, true)}</span><small>${L.balance} ${fmtMin(it.saldo, true)}</small></div>
+      <span class="dl">${ICON.download}</span>
+    </li>`).join('')}</ul></section>
+  <p class="hint">${L.periodHint}</p>`;
+}
+
+async function saveFile(bytes, name) {
+  const file = new File([bytes], name, { type: 'application/pdf' });
+  try {
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
+  } catch (e) { if (e?.name === 'AbortError') return; }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+async function periodPdf(key) {
+  if (S.busy) return;
+  S.busy = true; render();
+  try {
+    const now = new Date();
+    const { buildMonthPdf, buildYearPdf } = await import('./lib/pdf-report.js');
+    const logo = await getLogo();
+    let bytes, name;
+    if (key.length === 7) {
+      const st = rangeStats(`${key}-01`, lastOfMonth(key), S.byDay, S.absences, now);
+      bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), S.byDay, S.absences, now), logo);
+      name = `Arbeitszeit_${key}.pdf`;
+    } else {
+      const months = [];
+      for (let m = 1; m <= 12; m++) {
+        const ym = `${key}-${String(m).padStart(2, '0')}`;
+        months.push({ ym, st: rangeStats(`${ym}-01`, lastOfMonth(ym), S.byDay, S.absences, now), saldo: saldoAt(lastOfMonth(ym), S.byDay, S.absences, now) });
+      }
+      bytes = await buildYearPdf(+key, months, rangeStats(`${key}-01-01`, `${key}-12-31`, S.byDay, S.absences, now), saldoAt(`${key}-12-31`, S.byDay, S.absences, now), logo);
+      name = `Arbeitszeit_${key}.pdf`;
+    }
+    S.busy = false; render();
+    await saveFile(bytes, name);
+  } catch (e) { S.busy = false; toast(T().pdfError + e.message, true); }
 }
 
 async function download(path) {
@@ -522,6 +662,9 @@ app.addEventListener('click', async (e) => {
   else if (a === 'abs') toggleAbsence(el.dataset.day);
   else if (a === 'genpdf') generatePdf(S.weekMonday);
   else if (a === 'dl') download(el.dataset.path);
+  else if (a === 'arch') { S.archTab = el.dataset.v; render(); }
+  else if (a === 'rep') periodPdf(el.dataset.k);
+  else if (a === 'pt') { S.chartSel = +el.dataset.i; render(); }
   else if (a === 'settings') { S.settings = true; render(); }
   else if (a === 'setclose') { S.settings = false; render(); }
   else if (a === 'push') togglePush();

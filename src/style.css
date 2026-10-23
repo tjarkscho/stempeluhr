@@ -4,6 +4,7 @@
   --pos: #1a7f45; --neg: #b3261e;
   --fe: #d8e8fa; --fh: #e9f2fc; --kr: #fbe3df; --ft: #ececef;
   --logo: brightness(0);
+  --ring: #1a9e52; --ring-over: #e5352b;
   color-scheme: light;
 }
 [data-theme="creme"] {
@@ -182,3 +183,34 @@ header .icon svg { display: block; }
 .balance > div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .balance span { display: block; font-size: 12px; color: var(--muted); }
 .balance b { font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* Fortschrittsring (Apple-Watch-Stil) */
+:root { --ring: #1a9e52; --ring-over: #e5352b; }
+[data-theme="dunkel"], [data-theme="dunkelblau"] { --ring: #30d158; --ring-over: #ff453a; }
+.ring { position: relative; width: 220px; max-width: 70vw; aspect-ratio: 1; margin: 12px auto 4px; }
+.ring svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.ring circle { fill: none; stroke-width: 18; stroke-linecap: round; }
+.r-track { stroke: var(--ring); opacity: .15; }
+.r-base { stroke: var(--ring); }
+.r-over { stroke: var(--ring-over); filter: drop-shadow(0 0 3px rgba(0,0,0,.45)); }
+.ring-in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ring .clock { font-size: 46px; margin: 0; line-height: 1; }
+.ring-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.ring-sub .over { color: var(--ring-over); }
+
+/* Saldo-Verlauf */
+.chart { margin-top: 14px; }
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+.chart-head b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.c-zero { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.c-line { fill: none; stroke: var(--muted); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.c-area.pos { fill: var(--pos); opacity: .14; }
+.c-area.neg { fill: var(--neg); opacity: .14; }
+.c-pt { stroke: var(--card); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.c-pt.pos { fill: var(--pos); } .c-pt.neg { fill: var(--neg); }
+.c-hit { fill: transparent; cursor: pointer; }
+.c-x { font-size: 10px; fill: var(--muted); }
+
+/* Archiv-Tabs */
+.seg3 { grid-template-columns: 1fr 1fr 1fr; margin-bottom: 12px; }

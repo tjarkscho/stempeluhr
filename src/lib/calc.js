@@ -95,8 +95,8 @@ export function dayStats(events, isToday, now = new Date()) {
 
   r.span = Math.max(0, Math.round((endT - r.in.getTime()) / 60000));
   r.stamped = Math.round(stampedMs / 60000);
-  // laufender Tag: noch kein Zwangsabzug, solange er offen ist
-  r.pause = r.open ? r.stamped : effectiveBreak(r.span, r.stamped);
+  // auch am laufenden Tag gleich die gesetzliche Mindestpause berücksichtigen (keine Sprünge beim Ausstempeln)
+  r.pause = effectiveBreak(r.span, r.stamped);
   r.autoPause = r.pause > r.stamped;
   r.total = Math.max(0, r.span - r.pause);
   return r;
@@ -118,6 +118,52 @@ export function dayTargets(day, absences) {
   return { soll, credit, label };
 }
 
+/** Auswertung eines einzelnen Tages inkl. Gutschrift und Zuschlag */
+export function dayRecord(day, byDay, absences, now = new Date()) {
+  const today = dayKey(now);
+  const i = weekday(day);
+  const s = dayStats(byDay.get(day), day === today, now);
+  const t = dayTargets(day, absences);
+  const counted = day >= CONFIG.startDate; // vor Start: nur anzeigen, nicht zählen
+  // Zuschlag: Samstag +25 %, Sonntag/Feiertag +50 % (als Zeitgutschrift)
+  const rate = i === 6 || holidayName(day) ? CONFIG.surcharge.sunday : i === 5 ? CONFIG.surcharge.saturday : 0;
+  const bonus = counted && !s.open ? Math.round(s.total * rate) : 0;
+  const total = counted ? s.total + t.credit + bonus : 0;
+  return { day, ...s, ...t, counted, rate, bonus, dayTotal: counted ? total : s.total };
+}
+
+/** Ist ein Tag "abgeschlossen" (zählt für Stand-heute-Werte)? */
+const isDone = (r, today) => r.day < today || (r.day === today && (r.credit > 0 || (r.in && !r.open)));
+
+/**
+ * Auswertung eines beliebigen Zeitraums (Monat, Jahr). Zählt nur abgeschlossene Tage.
+ * @returns { days, soll, ist, diff, bonus, vacation, sick, partial }
+ */
+export function rangeStats(from, to, byDay, absences, now = new Date()) {
+  const today = dayKey(now);
+  const days = [];
+  let soll = 0, ist = 0, bonus = 0, vacation = 0, sick = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const r = dayRecord(d, byDay, absences, now);
+    r.done = isDone(r, today);
+    days.push(r);
+    if (!r.counted || !r.done) continue;
+    soll += r.soll; ist += r.dayTotal; bonus += r.bonus;
+    if (r.label === 'Ferien') vacation += 1;
+    if (r.label === '½ Ferien') vacation += 0.5;
+    if (r.label === 'Krank') sick += 1;
+  }
+  return { from, to, days, soll, ist, diff: ist - soll, bonus, vacation, sick, partial: to >= today };
+}
+
+/** Saldo vom Startdatum bis inkl. `day` (höchstens bis heute) */
+export function saldoAt(day, byDay, absences, now = new Date()) {
+  const today = dayKey(now);
+  const end = day < today ? day : today;
+  if (end < CONFIG.startDate) return 0;
+  return rangeStats(CONFIG.startDate, end, byDay, absences, now).diff;
+}
+
 /**
  * Wochenauswertung.
  * @param monday   'YYYY-MM-DD'
@@ -131,20 +177,15 @@ export function weekStats(monday, byDay, absences, now = new Date(), sollUntil =
   let soll = 0, ist = 0, sollToDate = 0, istToDate = 0;
   for (let i = 0; i < 7; i++) {
     const day = addDays(monday, i);
-    const s = dayStats(byDay.get(day), day === today, now);
-    const t = dayTargets(day, absences);
-    const counted = day >= CONFIG.startDate; // vor Start: nur anzeigen, nicht zählen
-    // Zuschlag: Samstag +25 %, Sonntag/Feiertag +50 % (als Zeitgutschrift)
-    const rate = i === 6 || holidayName(day) ? CONFIG.surcharge.sunday : i === 5 ? CONFIG.surcharge.saturday : 0;
-    const bonus = counted && !s.open ? Math.round(s.total * rate) : 0;
-    const total = counted ? s.total + t.credit + bonus : 0;
-    days.push({ day, ...s, ...t, counted, rate, bonus, dayTotal: counted ? total : s.total });
-    soll += t.soll;
+    const r = dayRecord(day, byDay, absences, now);
+    const total = r.counted ? r.dayTotal : 0;
+    days.push(r);
+    soll += r.soll;
     ist += total;
     // "Stand heute": vergangene Tage + heute, sobald ausgestempelt oder abwesend
     const counts = !sollUntil || day < sollUntil ||
-      (day === sollUntil && (t.credit > 0 || (s.in && !s.open)));
-    if (counts) { sollToDate += t.soll; istToDate += total; }
+      (day === sollUntil && (r.credit > 0 || (r.in && !r.open)));
+    if (counts) { sollToDate += r.soll; istToDate += total; }
   }
   const { year, week } = isoWeek(monday);
   const bonus = days.reduce((a, d) => a + d.bonus, 0);
