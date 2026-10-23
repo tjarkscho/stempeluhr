@@ -17,6 +17,7 @@ applyPrefs();
 if (!URL_ || !KEY) {
   app.innerHTML = `<div class="center"><div class="card"><h2>Konfiguration fehlt</h2>
   <p>VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY in <code>.env</code> setzen (siehe README).</p></div></div>`;
+  document.getElementById('splash')?.remove();
   throw new Error('Supabase env fehlt');
 }
 
@@ -54,6 +55,7 @@ const ICON = {
   download: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   warn: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>',
   cloud: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5H7z"/><path d="M4 4l16 16"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   out: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 16l-4-4 4-4M5 12h10"/></svg>',
 };
 
@@ -143,8 +145,38 @@ function todayInfo() {
   return { now, today, events, st, forgot };
 }
 
+// Haptik: Android per vibrate; iOS (Safari 18+) über den nativen Schalter-Trick
+function haptic() {
+  try { if (navigator.vibrate) { navigator.vibrate(35); return; } } catch { /* egal */ }
+  try {
+    let lab = document.getElementById('hap');
+    if (!lab) {
+      lab = document.createElement('label'); lab.id = 'hap'; lab.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;overflow:hidden';
+      lab.innerHTML = '<input type="checkbox" switch>'; document.body.appendChild(lab);
+    }
+    lab.click();
+  } catch { /* egal */ }
+}
+
+// Bestätigung nach dem Stempeln: Häkchen zeichnet sich, kurz halten, ausblenden
+function confirmStamp(kind, ts, offline) {
+  const L = T();
+  const color = { in: 'var(--go)', out: 'var(--stop)', break_start: 'var(--pause)', break_end: 'var(--go)' }[kind];
+  document.querySelector('.confirm')?.remove();
+  const el = document.createElement('div');
+  el.className = 'confirm';
+  el.style.setProperty('--cc', color);
+  el.innerHTML = `<div class="confirm-box">
+    <svg viewBox="0 0 64 64" width="84" height="84"><circle class="cc-ring" cx="32" cy="32" r="28"/><path class="cc-check" d="M19 33.5l8.5 8.5L45.5 23"/></svg>
+    <b>${L.done[kind]}</b><span>${L.at(hhmm(ts))}${offline ? `<br>${L.offlineSaved}` : ''}</span></div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('out'), 1250);
+  setTimeout(() => el.remove(), 1650);
+}
+
 async function stamp(kinds) {
   if (S.busy) return;
+  haptic();
   S.busy = true; render();
   const ts = new Date();
   const rows = kinds.map((kind, i) => ({ kind, ts: new Date(ts.getTime() + i * 1000).toISOString() }));
@@ -154,17 +186,62 @@ async function stamp(kinds) {
   } else error = new Error('offline');
   S.busy = false;
   if (error && !isNetErr(error) && error.message !== 'offline') return toast(T().error + error.message, true);
-  if (navigator.vibrate) navigator.vibrate(40);
+  const lastKind = kinds[kinds.length - 1];
   if (error) {
     // offline -> lokal merken, später hochladen
     lsSet(QKEY, [...queue(), ...rows]);
     setEntries(S.entries.filter((e) => !e.pending));
     render();
-    return toast(`${T().kind[kinds[kinds.length - 1]]} ${hhmm(ts)} · ${T().offlineSaved}`);
+    return confirmStamp(lastKind, ts, true);
   }
+  confirmStamp(lastKind, ts, false);
   await loadEntries().catch(() => {});
-  toast(`${T().kind[kinds[kinds.length - 1]]} ${hhmm(ts)}`);
+  render();
 }
+
+// ---------------- Wisch-Regler (Touch) / Knopf (Maus) ----------------
+const touchUI = () => matchMedia('(pointer: coarse)').matches;
+function stampControl(act, cls, label, slideLabel) {
+  if (!touchUI()) return `<button class="big ${cls}" data-act="${act}" ${S.busy ? 'disabled' : ''}>${label}</button>`;
+  return `<div class="slider ${cls}" data-slide="${act}" ${S.busy ? 'aria-disabled="true"' : ''}>
+    <span class="slider-fill"></span><span class="slider-label">${slideLabel}</span>
+    <span class="slider-knob"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+  </div>`;
+}
+let slide = null;
+app.addEventListener('pointerdown', (e) => {
+  const knob = e.target.closest('.slider-knob');
+  if (!knob || S.busy) return;
+  const sl = knob.closest('.slider');
+  const max = sl.clientWidth - knob.offsetWidth - 8;
+  slide = { sl, knob, x0: e.clientX, max, act: sl.dataset.slide, dx: 0 };
+  knob.setPointerCapture(e.pointerId);
+  sl.classList.add('dragging');
+});
+app.addEventListener('pointermove', (e) => {
+  if (!slide) return;
+  slide.dx = Math.max(0, Math.min(slide.max, e.clientX - slide.x0));
+  const p = slide.dx / slide.max;
+  slide.knob.style.transform = `translateX(${slide.dx}px)`;
+  slide.sl.style.setProperty('--p', p.toFixed(3));
+});
+const endSlide = () => {
+  if (!slide) return;
+  const s_ = slide; slide = null;
+  s_.sl.classList.remove('dragging');
+  if (s_.dx / s_.max > 0.85) {
+    s_.knob.style.transform = `translateX(${s_.max}px)`;
+    s_.sl.style.setProperty('--p', '1');
+    if (s_.act === 'in') stamp(['in']);
+    else if (s_.act === 'out') stamp(todayInfo().st.state === 'break' ? ['break_end', 'out'] : ['out']);
+  } else {
+    s_.knob.animate([{ transform: `translateX(${s_.dx}px)` }, { transform: 'translateX(0)' }], { duration: 380, easing: 'cubic-bezier(.22,1,.36,1)' });
+    s_.knob.style.transform = '';
+    s_.sl.style.setProperty('--p', '0');
+  }
+};
+app.addEventListener('pointerup', endSlide);
+app.addEventListener('pointercancel', endSlide);
 
 /** Differenz des noch laufenden heutigen Tages (0, wenn nicht eingestempelt) */
 function liveToday(now = new Date()) {
@@ -190,13 +267,13 @@ function viewStamp() {
   const need = st.state !== 'off' ? Math.max(0, (t.soll - t.credit) - st.total) : null;
   const sg = (m) => `<b class="${m < 0 ? 'neg' : m > 0 ? 'pos' : ''}">${fmtMin(m, true)}</b>`;
   let buttons = '';
-  if (st.state === 'off') buttons = `<button class="big go" data-act="in" ${S.busy ? 'disabled' : ''}>${L.clockIn}</button>`;
+  if (st.state === 'off') buttons = stampControl('in', 'go', L.clockIn, L.slideIn);
   else if (st.state === 'work') buttons = `
-    <button class="big stop" data-act="out" ${S.busy ? 'disabled' : ''}>${L.clockOut}</button>
+    ${stampControl('out', 'stop', L.clockOut, L.slideOut)}
     <button class="big pause" data-act="pause" ${S.busy ? 'disabled' : ''}>${L.pause}</button>`;
   else buttons = `
     <button class="big go" data-act="pause_end" ${S.busy ? 'disabled' : ''}>${L.pauseEnd}</button>
-    <button class="big stop" data-act="out" ${S.busy ? 'disabled' : ''}>${L.clockOut}</button>`;
+    ${stampControl('out', 'stop', L.clockOut, L.slideOut)}`;
 
   const pend = queue().length;
   return `
@@ -583,15 +660,38 @@ async function toggleAbsence(day) {
 }
 
 // ---------------- Login ----------------
+function loginDial() {
+  // Zifferblatt einer Stempeluhr: 60 Minutenstriche, Bogen = laufende Stunde, Mitte = Uhrzeit
+  const now = new Date();
+  const [h, mi] = hhmm(now).split(':').map(Number);
+  const R = 92, C = 2 * Math.PI * R;
+  let ticks = '';
+  for (let i = 0; i < 60; i++) {
+    const a = (i / 60) * 2 * Math.PI, big = i % 5 === 0;
+    const r1 = big ? 104 : 107, r2 = 112;
+    ticks += `<line class="${big ? 'tk tk-h' : 'tk'} ${i <= mi ? 'past' : ''}" x1="${(120 + r1 * Math.sin(a)).toFixed(1)}" y1="${(120 - r1 * Math.cos(a)).toFixed(1)}" x2="${(120 + r2 * Math.sin(a)).toFixed(1)}" y2="${(120 - r2 * Math.cos(a)).toFixed(1)}"/>`;
+  }
+  return `<div class="dial" aria-hidden="true"><svg viewBox="0 0 240 240">${ticks}
+    <circle class="d-track" cx="120" cy="120" r="${R}"/>
+    <circle class="d-arc" cx="120" cy="120" r="${R}" stroke-dasharray="${((mi / 60) * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 120 120)"/></svg>
+    <div class="dial-in"><span class="dial-time">${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}</span>
+    <span class="dial-date">${now.toLocaleDateString(prefs.lang === 'fr' ? 'fr-CH' : 'de-CH', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Zurich' })}</span></div></div>`;
+}
+
 function viewLogin() {
   const L = T();
-  return `<div class="center"><form class="card login" id="login">
-    <div class="logo"><img src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" /></div>
-    <h1>Stempeluhr</h1>
-    <input type="email" name="email" placeholder="${L.email}" autocomplete="username" required />
-    <input type="password" name="pw" placeholder="${L.password}" autocomplete="current-password" required />
-    <button class="btn" ${S.busy ? 'disabled' : ''}>${L.login}</button>
-  </form></div>`;
+  return `<div class="login-wrap">
+    <img class="login-logo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" />
+    ${loginDial()}
+    <form class="login" id="login" novalidate>
+      <h1>Stempeluhr</h1>
+      <label class="fld"><span>${L.email}</span><input type="email" name="email" autocomplete="username" inputmode="email" required /></label>
+      <label class="fld"><span>${L.password}</span><span class="pw"><input type="password" name="pw" autocomplete="current-password" required />
+        <button type="button" class="pw-eye" data-act="pweye" aria-label="${L.showPw}">${ICON.eye}</button></span></label>
+      <button class="btn login-btn" ${S.busy ? 'disabled' : ''}>${S.busy ? L.loggingIn : L.login}</button>
+      ${S.loginErr ? `<p class="login-err">${esc(S.loginErr)}</p>` : ''}
+    </form>
+  </div>`;
 }
 
 // ---------------- Einstellungen ----------------
@@ -661,7 +761,7 @@ function animateAfterRender() {
 // Wischen zwischen den Tabs (folgt dem Finger)
 let touch = null;
 app.addEventListener('touchstart', (e) => {
-  if (!S.user || S.editor || S.drawer || S.settings || !e.target.closest('main') || e.target.closest('input,select,textarea,.c-hit')) return;
+  if (!S.user || S.editor || S.drawer || S.settings || !e.target.closest('main') || e.target.closest('input,select,textarea,.c-hit,.slider')) return;
   const t = e.touches[0];
   touch = { x: t.clientX, y: t.clientY, t: performance.now(), dir: null, dx: 0 };
 }, { passive: true });
@@ -726,9 +826,14 @@ app.addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
   S.busy = true; render();
+  S.loginErr = null;
   const { error } = await sb.auth.signInWithPassword({ email: f.get('email'), password: f.get('pw') });
   S.busy = false;
-  if (error) toast(T().loginFailed, true);
+  if (error) {
+    S.loginErr = T().loginFailedHint; render();
+    const fm = app.querySelector('#login');
+    if (fm) { fm.email.value = f.get('email'); fm.pw.focus(); }
+  }
 });
 
 app.addEventListener('change', (e) => {
@@ -771,13 +876,16 @@ app.addEventListener('click', async (e) => {
   else if (a === 'pt') { S.chartSel = +el.dataset.i; render(); }
   else if (a === 'settings') { S.settings = true; enterAnim = 'sheet'; render(); }
   else if (a === 'setclose') { S.settings = false; render(); }
+  else if (a === 'pweye') { const i = el.parentElement.querySelector('input'); i.type = i.type === 'password' ? 'text' : 'password'; el.classList.toggle('on'); }
   else if (a === 'push') togglePush();
   else if (a === 'pref') { setPref(el.dataset.k, el.dataset.v); render(); }
   else if (a === 'logout') { await sb.auth.signOut(); }
 });
 
 // Uhr aktualisieren
-setInterval(() => { if (S.user && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings) render(); }, 30000);
+// Login-Zifferblatt jede Minute nachführen (ohne die Eingaben zu verlieren)
+setInterval(() => { if (!S.user) { const d = app.querySelector('.dial'); if (d) d.outerHTML = loginDial(); } }, 15000);
+setInterval(() => { if (S.user && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !slide) render(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && S.user) flushQueue().then(() => loadEntries()).then(render).catch(() => render());
 });
@@ -821,9 +929,19 @@ async function togglePush() {
   S.busy = false; render();
 }
 
+function hideSplash() {
+  const sp = document.getElementById('splash');
+  if (!sp || sp.dataset.out) return;
+  sp.dataset.out = '1';
+  const wait = Math.max(0, 650 - performance.now()); // kurz sichtbar lassen, nicht flackern
+  setTimeout(() => sp.classList.add('gone'), wait);
+  setTimeout(() => sp.remove(), wait + 450);
+}
+
 sb.auth.onAuthStateChange((_ev, session) => {
   const was = S.user?.id;
   S.user = session?.user || null;
   if (S.user && S.user.id !== was) loadAll();
   else render();
+  hideSplash();
 });
