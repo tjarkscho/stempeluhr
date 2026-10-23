@@ -377,7 +377,9 @@ function viewPeriods(L) {
 async function saveFile(bytes, name) {
   const file = new File([bytes], name, { type: 'application/pdf' });
   try {
-    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
+    // Teilen-Dialog nur am Handy (dort klappt "Sichern in Dateien" am besten); am PC direkt herunterladen
+    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+    if (mobile && navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
   } catch (e) { if (e?.name === 'AbortError') return; }
   const url = URL.createObjectURL(file);
   const a = document.createElement('a');
