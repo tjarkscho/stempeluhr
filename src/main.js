@@ -169,8 +169,15 @@ function viewStamp() {
   const t = dayTargets(today, S.absences);
   const L = T();
   const stateTxt = { off: st.in ? L.stateOff : L.stateNone, work: L.stateWork, break: L.stateBreak }[st.state];
-  const saldo = saldoThrough(mondayOf(today), S.byDay, S.absences);
+  const now = new Date();
+  // Bilanz: heute / diese Woche / Saldo – ein laufender Tag zählt live mit
+  const todayDiff = st.total + t.credit - t.soll;
+  const live = st.open ? todayDiff : 0;            // offener Tag ist in den Wochenwerten noch nicht enthalten
+  const wk = weekStats(mondayOf(today), S.byDay, S.absences, now, today);
+  const weekDiff = wk.diffToDate + live;
+  const saldo = saldoThrough(mondayOf(today), S.byDay, S.absences, now) + live;
   const need = st.state !== 'off' ? Math.max(0, (t.soll - t.credit) - st.total) : null;
+  const sg = (m) => `<b class="${m < 0 ? 'neg' : m > 0 ? 'pos' : ''}">${fmtMin(m, true)}</b>`;
   let buttons = '';
   if (st.state === 'off') buttons = `<button class="big go" data-act="in" ${S.busy ? 'disabled' : ''}>${L.clockIn}</button>`;
   else if (st.state === 'work') buttons = `
@@ -190,10 +197,15 @@ function viewStamp() {
     <div class="sub">${L.workedToday}${t.label ? ` · ${esc(label(t.label))}` : ''}</div>
     <div class="facts">
       <div><span>${L.in}</span><b>${st.in ? hhmm(st.in) : '–'}</b></div>
-      <div><span>${L.pause}</span><b>${fmtMin(st.stamped)}</b></div>
-      <div><span>${need != null ? L.remaining : L.balance}</span><b>${need != null ? fmtMin(need) : fmtMin(saldo, true)}</b></div>
+      <div><span>${L.pause}</span><b>${fmtMin(st.pause)}</b></div>
+      <div><span>${L.remaining}</span><b>${need != null ? fmtMin(need) : '–'}</b></div>
     </div>
   </section>
+  <div class="balance">
+    <div><span>${L.diffToday}</span>${sg(todayDiff)}</div>
+    <div><span>${L.tabWeek}</span>${sg(weekDiff)}</div>
+    <div><span>${L.balanceTotal}</span>${sg(saldo)}</div>
+  </div>
   <div class="buttons">${buttons}</div>
   <p class="hint">${L.breakHint}</p>
   <button class="link" data-act="edit" data-day="${today}">${L.correctToday}</button>`;
@@ -237,10 +249,10 @@ function viewWeek() {
     </table>
   </section>
   <div class="stats">
-    <div><span>${L.target}</span><b>${fmtMin(w.soll)}</b></div>
-    <div><span>${L.actual}</span><b>${fmtMin(w.ist)}</b>${w.bonus ? `<small class="sub2">${L.bonus} ${fmtMin(w.bonus)}</small>` : ''}</div>
-    <div><span>${L.diff}${isCurrent ? ' ' + L.today : ''}</span><b class="${dw < 0 ? 'neg' : 'pos'}">${fmtMin(dw, true)}</b></div>
-    <div><span>${L.balanceTotal}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b></div>
+    <div><span>${L.targetWeek}</span><b>${fmtMin(w.soll)}</b></div>
+    <div><span>${L.actualWeek}</span><b>${fmtMin(w.ist)}</b>${w.bonus ? `<small class="sub2">${L.bonus} ${fmtMin(w.bonus)}</small>` : ''}</div>
+    <div><span>${L.diffWeek}</span><b class="${dw < 0 ? 'neg' : 'pos'}">${fmtMin(dw, true)}</b>${isCurrent ? `<small class="sub2">${L.untilToday}</small>` : ''}</div>
+    <div><span>${L.balanceTotal}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b><small class="sub2">${L.since(fmtDate(CONFIG.startDate))}</small></div>
   </div>
   <p class="hint">${L.weekHint}</p>
   ${done && addDays(m, 6) >= CONFIG.startDate ? `<button class="btn" data-act="genpdf" ${S.busy ? 'disabled' : ''}>${rep ? L.pdfRemake : L.pdfMake}</button>` : ''}
