@@ -28,7 +28,7 @@ async function check(force: boolean) {
   const { day, hour } = zurichNow();
   if (hour !== 18 && !force) return { skipped: `Zürich ${hour} Uhr` };
   const keys = await vapid();
-  webpush.setVapidDetails('mailto:stempeluhr@example.invalid', keys.pub, keys.priv);
+  webpush.setVapidDetails('https://tjarkscho.github.io/stempeluhr/', keys.pub, keys.priv);
 
   const { data: subs } = await sb.from('push_subs').select('*');
   const users = [...new Set((subs ?? []).map((s) => s.user_id))];

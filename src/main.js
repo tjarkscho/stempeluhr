@@ -240,7 +240,7 @@ function viewWeek() {
     <div><span>${L.target}</span><b>${fmtMin(w.soll)}</b></div>
     <div><span>${L.actual}</span><b>${fmtMin(w.ist)}</b>${w.bonus ? `<small class="sub2">${L.bonus} ${fmtMin(w.bonus)}</small>` : ''}</div>
     <div><span>${L.diff}${isCurrent ? ' ' + L.today : ''}</span><b class="${dw < 0 ? 'neg' : 'pos'}">${fmtMin(dw, true)}</b></div>
-    <div><span>${L.balanceTotal}${isCurrent ? ' ' + L.today : ''}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b></div>
+    <div><span>${L.balanceTotal}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b></div>
   </div>
   <p class="hint">${L.weekHint}</p>
   ${done && addDays(m, 6) >= CONFIG.startDate ? `<button class="btn" data-act="genpdf" ${S.busy ? 'disabled' : ''}>${rep ? L.pdfRemake : L.pdfMake}</button>` : ''}
