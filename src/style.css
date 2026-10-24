@@ -391,3 +391,11 @@ nav button { font-size: 15px; }
 .link.danger { color: var(--neg); }
 input.flash { animation: flash 1.2s ease-out; }
 @keyframes flash { 0% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--go) 45%, transparent); border-color: var(--go); } }
+.cat-km { --cc: #c2456b; }
+.exp-alt { display: flex; justify-content: center; gap: 8px; margin-top: 4px; }
+.exp-alt .exp-pick { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 10px 12px; font-size: 15px; font-weight: 600; }
+.exp-list .thumb.cat-km { color: var(--cc); background: color-mix(in srgb, var(--cc) 12%, var(--card)); }
+.km-calc { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--card)); font-variant-numeric: tabular-nums; }
+.km-formula { color: var(--muted); font-size: 14px; }
+.km-amt { font-size: 22px; }

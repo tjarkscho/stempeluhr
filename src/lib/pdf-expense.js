@@ -13,7 +13,12 @@ const C = {
   neg: rgb(0.68, 0.16, 0.13),
 };
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-export const CAT_DE = { essen: 'Verpflegung', fahrt: 'Fahrt', material: 'Material', uebernachtung: 'Übernachtung', anderes: 'Anderes' };
+export const CAT_DE = { essen: 'Verpflegung', fahrt: 'Fahrt', material: 'Material', uebernachtung: 'Übernachtung', anderes: 'Anderes', km: 'Kilometer' };
+const kmTxt = (km) => String(Number(km)).replace('.', ',');
+// Beschreibung: bei Kilometern Strecke + Rechnung, sonst Kommentar
+const desc = (it) => (it.category === 'km'
+  ? [it.route, `${kmTxt(it.km)} km x ${fmtChf(CONFIG.kmRate)}`, it.note].filter(Boolean).join(' · ')
+  : it.note || '');
 
 // Helvetica (WinAnsi) kann nicht alle Zeichen – Unbekanntes ersetzen statt abstürzen
 const safe = (s) => String(s ?? '').replace(/[’‘]/g, "'").replace(/[“”„]/g, '"').replace(/[–—]/g, '-')
@@ -95,7 +100,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
     text(String(i + 1), X.nr, yy + 7, { color: C.muted });
     text(fmtDate(it.day), X.date, yy + 7);
     text(CAT_DE[it.category] || CAT_DE.anderes, X.cat, yy + 7, { color: C.muted });
-    text(it.note || '–', X.note, yy + 7, { maxW: X.amt - X.note - 70, color: it.note ? C.text : C.faint });
+    text(desc(it) || '–', X.note, yy + 7, { maxW: X.amt - X.note - 70, color: desc(it) ? C.text : C.faint });
     text(fmtChf(it.amount), X.amt, yy + 7, { align: 'right', f: bold });
     hline(yy, 0.4);
   });
@@ -107,7 +112,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   const need = 30 + 54 + 110;
   if (yy - need < M + 20) { newPage(); yy = H - M; }
   yy -= 30 + 54;
-  const cells = [...cats.map((c) => [CAT_DE[c], fmtChf(tot.byCat[c])]), ['Total CHF', fmtChf(tot.total)]].slice(-5);
+  const cells = [...cats.map((c) => [CAT_DE[c], fmtChf(tot.byCat[c])]), ['Total CHF', fmtChf(tot.total)]].slice(-6);
   const bandH = 54, cw = (W - 2 * M) / cells.length;
   page.drawRectangle({ x: M, y: yy, width: W - 2 * M, height: bandH, color: C.band });
   cells.forEach(([k, v], i) => {
@@ -128,6 +133,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   yy -= 34;
   if (opts.draft) text(`Zwischenstand – ${opts.stamp || ''}. Noch kein abgeschlossenes Spesenblatt.`, M, yy, { size: 7.5, color: C.muted });
   else if (items.length) text('Belegfotos im Anhang, nummeriert wie in der Tabelle.', M, yy, { size: 7.5, color: C.muted });
+  if (items.some((it) => it.category === 'km')) { yy -= 11; text(`Kilometer: Fahrten mit Privatauto, CHF ${fmtChf(CONFIG.kmRate)} pro km.`, M, yy, { size: 7.5, color: C.muted }); }
 
   // ---- Belegfotos: 2 pro Seite ----
   const withPhoto = items.map((it, i) => ({ it, nr: i + 1, bytes: photos.get(it.id) })).filter((x) => x.bytes);

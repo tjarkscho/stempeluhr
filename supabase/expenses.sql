@@ -43,3 +43,10 @@ create policy "receipts own update" on storage.objects for update to authenticat
   using (bucket_id = 'receipts' and (storage.foldername(name))[1] = (select auth.uid())::text);
 create policy "receipts own delete" on storage.objects for delete to authenticated
   using (bucket_id = 'receipts' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- Kilometer (Privatauto): Strecke + km, Betrag = km x Satz
+alter table public.expenses add column if not exists km numeric(8,1);
+alter table public.expenses add column if not exists route text not null default '';
+alter table public.expenses drop constraint if exists expenses_category_check;
+alter table public.expenses add constraint expenses_category_check
+  check (category in ('essen','fahrt','material','uebernachtung','anderes','km'));

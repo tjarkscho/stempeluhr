@@ -7,7 +7,7 @@ import {
 } from './lib/time.js';
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
-import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, lastWorkday } from './lib/receipt.js';
+import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, PHOTO_CATS, kmAmount, lastWorkday } from './lib/receipt.js';
 import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt, dayRecord, lawBreak } from './lib/calc.js';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL;
@@ -65,6 +65,8 @@ const ICON = {
   cloud: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5H7z"/><path d="M4 4l16 16"/></svg>',
   face: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 9.5v1M15 9.5v1M12 9.5v3.5h-1M9.5 16c1.4 1 3.6 1 5 0"/></svg>',
   camera: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.6-2.2A1.5 1.5 0 0 1 9.8 5h4.4a1.5 1.5 0 0 1 1.2.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  car: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16V11.5l1.6-4.2A2 2 0 0 1 8.5 6h7a2 2 0 0 1 1.9 1.3l1.6 4.2V16"/><path d="M3.5 16h17v2.5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5V18h-11v.5a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5z"/><path d="M5 11.5h14"/><circle cx="8" cy="14" r=".6"/><circle cx="16" cy="14" r=".6"/></svg>',
+  image: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 16l-5-5-8 8.5"/></svg>',
   eye: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   out: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 16l-4-4 4-4M5 12h10"/></svg>',
 };
@@ -817,11 +819,14 @@ function viewExpenses() {
     ${cats.length > 1 ? `<div class="exp-cats">${cats.map((c) => `<span class="cat-${c}"><i></i>${L.cat[c]} ${fmtChf(tot.byCat[c])}</span>`).join('')}</div>` : ''}
   </section>
   <label class="big go cam">${ICON.camera}<span>${L.expPhoto}</span><input type="file" accept="image/*" capture="environment" data-exp-file hidden /></label>
-  <label class="link exp-pick">${L.expPick}<input type="file" accept="image/*" data-exp-file hidden /></label>
+  <div class="exp-alt">
+    <label class="link exp-pick">${ICON.image}<span>${L.expPickShort}</span><input type="file" accept="image/*" data-exp-file hidden /></label>
+    <button class="link exp-pick" data-act="expkm">${ICON.car}<span>${L.expKm}</span></button>
+  </div>
   ${items.length ? `<section class="card pad0"><ul class="list exp-list">${items.map((x) => `
     <li data-act="expopen" data-id="${x.id}">
-      <span class="thumb">${x.photo_path && S.thumbs[x.photo_path] ? `<img src="${esc(S.thumbs[x.photo_path])}" alt="" loading="lazy" />` : ICON.camera}</span>
-      <div><b>${esc(x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
+      <span class="thumb ${x.category === 'km' ? 'cat-km' : ''}">${x.category === 'km' ? ICON.car : x.photo_path && S.thumbs[x.photo_path] ? `<img src="${esc(S.thumbs[x.photo_path])}" alt="" loading="lazy" />` : ICON.camera}</span>
+      <div><b>${esc((x.category === 'km' ? x.route : '') || x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${x.category === 'km' ? `${String(Number(x.km)).replace('.', ',')} km` : L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
       <div class="r"><b>${fmtChf(x.amount)}</b></div>
     </li>`).join('')}</ul></section>` : `<p class="hint center-t">${L.expEmpty}</p>`}
   ${items.length ? `<button class="btn ghost" data-act="expdraft" ${S.busy ? 'disabled' : ''}>${L.expDraft}</button>` : ''}
@@ -832,8 +837,44 @@ function viewExpenses() {
     </li>`).join('')}</ul></section>` : ''}`;
 }
 
+function viewKmSheet() {
+  const L = T(), x = S.exp;
+  const routes = [...new Set(S.expenses.filter((e) => e.category === 'km' && e.route).map((e) => e.route))].slice(0, 20);
+  return `<div class="modal"><div class="sheet exp-sheet">
+    <div class="sheethead"><b>${x.id ? L.expKmEdit : L.expKmNew}</b><button class="icon" data-act="expclose">${ICON.close}</button></div>
+    <label class="fld"><span>${L.expRoute}</span><input data-exp="route" list="km-routes" maxlength="80" value="${esc(x.route || '')}" placeholder="${L.expRouteHint}" autocomplete="off" />
+      <datalist id="km-routes">${routes.map((r) => `<option value="${esc(r)}"></option>`).join('')}</datalist></label>
+    <div class="exp-grid">
+      <label class="fld"><span>${L.expKmField}</span><input data-exp="km" inputmode="decimal" value="${esc(x.km ?? '')}" placeholder="0" /></label>
+      <label class="fld"><span>${L.expDate}</span><input type="date" data-exp="day" value="${esc(x.day)}" max="${dayKey(new Date())}" /></label>
+    </div>
+    <button type="button" class="toggle ${x.ret ? 'on' : ''}" data-act="expret"><span>${L.expReturn}</span><i></i></button>
+    <div class="km-calc"><span class="km-formula">${kmFormula()}</span><b class="km-amt">CHF ${fmtChf(kmTotal().amount)}</b></div>
+    <label class="fld"><span>${L.expNote}</span><input data-exp="note" maxlength="120" value="${esc(x.note || '')}" placeholder="${L.expKmNoteHint}" /></label>
+    <button class="btn" data-act="expsave" ${S.busy ? 'disabled' : ''}>${L.save}</button>
+    ${x.id ? `<button class="link danger" data-act="expdel">${L.expDelete}</button>` : ''}
+  </div></div>`;
+}
+const numIn = (v) => Number(String(v ?? '').replace(/['’\s]/g, '').replace(',', '.'));
+function kmTotal() {
+  const x = S.exp, km = Math.round(numIn(x.km) * (x.ret ? 2 : 1) * 10) / 10;
+  return { km: km > 0 ? km : 0, amount: km > 0 ? kmAmount(km, CONFIG.kmRate) : 0 };
+}
+function kmFormula() {
+  const x = S.exp, k = numIn(x.km);
+  if (!(k > 0)) return `CHF ${fmtChf(CONFIG.kmRate)} / km`;
+  const t = kmTotal().km;
+  return `${x.ret ? `2 × ${String(k).replace('.', ',')} km = ` : ''}${String(t).replace('.', ',')} km × ${fmtChf(CONFIG.kmRate)}`;
+}
+function refreshKm() {
+  const f = app.querySelector('.km-formula'), a = app.querySelector('.km-amt');
+  if (f) f.textContent = kmFormula();
+  if (a) a.textContent = `CHF ${fmtChf(kmTotal().amount)}`;
+}
+
 function viewExpSheet() {
   const L = T(), x = S.exp;
+  if (x.kind === 'km') return viewKmSheet();
   const status = { run: L.expOcrRun, ok: L.expOcrOk, fail: L.expOcrFail }[x.ocr] || '';
   return `<div class="modal"><div class="sheet exp-sheet">
     <div class="sheethead"><b>${x.id ? L.expEdit : L.expNew}</b><button class="icon" data-act="expclose">${ICON.close}</button></div>
@@ -844,7 +885,7 @@ function viewExpSheet() {
       <label class="fld"><span>${L.expDate}</span><input type="date" data-exp="day" value="${esc(x.day)}" max="${dayKey(new Date())}" /></label>
     </div>
     <span class="fld-l">${L.expCat}</span>
-    <div class="chips">${CATEGORIES.map((c) => `<button type="button" class="chip cat-${c} ${x.category === c ? 'on' : ''}" data-act="expcat" data-v="${c}"><i></i>${L.cat[c]}</button>`).join('')}</div>
+    <div class="chips">${PHOTO_CATS.map((c) => `<button type="button" class="chip cat-${c} ${x.category === c ? 'on' : ''}" data-act="expcat" data-v="${c}"><i></i>${L.cat[c]}</button>`).join('')}</div>
     <label class="fld"><span>${L.expNote}</span><input data-exp="note" maxlength="120" value="${esc(x.note || '')}" placeholder="${L.expNoteHint}" /></label>
     <button class="btn" data-act="expsave" ${S.busy ? 'disabled' : ''}>${L.save}</button>
     ${x.id ? `<button class="link danger" data-act="expdel">${L.expDelete}</button>` : ''}
@@ -903,6 +944,10 @@ function newExpense(file) {
 function openExpense(id) {
   const x = S.expenses.find((e) => e.id === id);
   if (!x) return;
+  if (x.category === 'km') {
+    S.exp = { kind: 'km', id, day: x.day, km: String(Number(x.km)), ret: false, route: x.route, note: x.note, touched: {} };
+    enterAnim = 'sheet'; return render();
+  }
   S.exp = { id, day: x.day, amount: Number(x.amount).toFixed(2), category: x.category, note: x.note, url: x.photo_path ? S.thumbs[x.photo_path] : null, photo_path: x.photo_path, touched: {} };
   enterAnim = 'sheet';
   render();
@@ -910,6 +955,7 @@ function openExpense(id) {
 
 async function saveExpense() {
   const L = T(), x = S.exp;
+  if (x.kind === 'km') return saveKm();
   const amount = Number(String(x.amount).replace(/['’\s]/g, '').replace(',', '.'));
   if (!(amount > 0)) { toast(L.expNeedAmount, true); app.querySelector('[data-exp=amount]')?.focus(); return; }
   if (!x.day) { toast(L.expNeedDate, true); return; }
@@ -934,6 +980,26 @@ async function saveExpense() {
     await loadExpenses();
     render();
     toast(x.id ? L.expSaved : L.expAdded(fmtChf(row.amount)));
+  } catch (e) { S.busy = false; render(); toast(L.error + (e.message || e), true); }
+}
+
+async function saveKm() {
+  const L = T(), x = S.exp;
+  const { km, amount } = kmTotal();
+  if (!(km > 0)) { toast(L.expNeedKm, true); app.querySelector('[data-exp=km]')?.focus(); return; }
+  if (!x.day) { toast(L.expNeedDate, true); return; }
+  const route = (x.route || '').trim() + (x.ret ? ` ${L.expRetSuffix}` : '');
+  S.busy = true; render();
+  try {
+    const row = { day: x.day, amount, category: 'km', km, route, note: (x.note || '').trim() };
+    const { error } = x.id ? await sb.from('expenses').update(row).eq('id', x.id) : await sb.from('expenses').insert(row);
+    if (error) throw error;
+    S.expMonth = x.day.slice(0, 7);
+    S.exp = null; S.busy = false;
+    haptic();
+    await loadExpenses();
+    render();
+    toast(L.expKmAdded(String(km).replace('.', ','), fmtChf(amount)));
   } catch (e) { S.busy = false; render(); toast(L.error + (e.message || e), true); }
 }
 
@@ -1054,6 +1120,21 @@ app.addEventListener('input', (e) => {
   if (!t.dataset.exp || !S.exp) return;
   S.exp[t.dataset.exp] = t.value;
   S.exp.touched = { ...S.exp.touched, [t.dataset.exp]: true };
+  if (S.exp.kind === 'km') {
+    if (t.dataset.exp === 'route' && !S.exp.touched.km) {
+      // bekannte Strecke: Kilometer vom letzten Mal übernehmen
+      const r = t.value.trim(), ret = (T().expRetSuffix || '').trim();
+      const prev = S.expenses.find((e) => e.category === 'km' && (e.route === r || e.route === `${r} ${ret}`));
+      if (prev) {
+        const isRet = prev.route.endsWith(ret);
+        S.exp.km = String(isRet ? Number(prev.km) / 2 : Number(prev.km)); S.exp.ret = isRet;
+        if (isRet) S.exp.route = r;
+        const k = app.querySelector('[data-exp=km]'); if (k) { k.value = S.exp.km; k.classList.add('flash'); }
+        app.querySelector('[data-act=expret]')?.classList.toggle('on', isRet);
+      }
+    }
+    refreshKm();
+  }
 });
 
 // Zahlen beim Öffnen kurz hochzählen lassen
@@ -1164,6 +1245,8 @@ app.addEventListener('click', async (e) => {
   else if (a === 'expsave') saveExpense();
   else if (a === 'expdel') deleteExpense(el);
   else if (a === 'expdraft') expenseDraftPdf();
+  else if (a === 'expkm') { S.exp = { kind: 'km', day: dayKey(new Date()), km: '', ret: false, route: '', note: '', touched: {} }; enterAnim = 'sheet'; render(); app.querySelector('[data-exp=route]')?.focus(); }
+  else if (a === 'expret') { S.exp.ret = !S.exp.ret; el.classList.toggle('on', S.exp.ret); refreshKm(); }
   else if (a === 'arch') { S.archTab = el.dataset.v; render(); }
   else if (a === 'rep') periodPdf(el.dataset.k);
   else if (a === 'pt') { S.chartSel = +el.dataset.i; render(); }

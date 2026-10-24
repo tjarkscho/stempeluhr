@@ -55,7 +55,11 @@ export function parseReceipt(text, today = new Date()) {
   return { amount: parseAmount(text), day: parseDate(text, today) };
 }
 
-export const CATEGORIES = ['essen', 'fahrt', 'material', 'uebernachtung', 'anderes'];
+export const CATEGORIES = ['essen', 'fahrt', 'material', 'uebernachtung', 'anderes', 'km'];
+export const PHOTO_CATS = CATEGORIES.filter((c) => c !== 'km');
+
+/** Kilometer-Betrag (Rappen-genau) */
+export const kmAmount = (km, rate) => Math.round(Number(km || 0) * rate * 100) / 100;
 
 /** Summen pro Kategorie und gesamt (Rappen-genau) */
 export function expenseTotals(items) {
