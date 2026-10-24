@@ -296,7 +296,13 @@ header .icon svg { display: block; }
 .tk.past { stroke: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .tk-h.past { stroke: var(--accent); }
 .d-track { fill: none; stroke: var(--line); stroke-width: 3; opacity: .7; }
-.d-arc { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
+.d-arc { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round;
+  stroke-dasharray: var(--c) var(--c); stroke-dashoffset: var(--c); animation: d-sweep 60s linear infinite; }
+@keyframes d-sweep { to { stroke-dashoffset: 0; } }
+.d-dot { transform-box: view-box; transform-origin: 120px 120px; animation: d-rot 60s linear infinite; }
+.d-dot circle { fill: var(--accent); }
+@keyframes d-rot { to { transform: rotate(360deg); } }
+.tk { transition: stroke .3s; }
 .dial-in { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 4px; }
 .dial-time { font-size: clamp(40px, 13vw, 54px); font-weight: 300; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
 .dial-date { font-size: 13px; color: var(--muted); }
@@ -328,7 +334,7 @@ header .icon svg { display: block; }
 .ring .sec { transform-box: view-box; transform-origin: 100px 100px; animation: sec-rot 60s linear infinite; }
 .ring .sec circle { fill: var(--card); stroke: var(--ring); stroke-width: 2.5; filter: drop-shadow(0 0 2px rgba(0,0,0,.25)); }
 @keyframes sec-rot { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .ring .sec { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ring .sec, .d-arc, .d-dot { animation: none; } }
 
 /* ---------------- Kalender-Heatmap (Farbton) ---------------- */
 :root, [data-theme="weiss"], [data-theme="creme"] { --heat-s: 72%; --heat-l: 80%; --heat-t: #1d2410; }

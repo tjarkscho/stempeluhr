@@ -690,21 +690,32 @@ async function toggleAbsence(day) {
 
 // ---------------- Login ----------------
 function loginDial() {
-  // Zifferblatt einer Stempeluhr: 60 Minutenstriche, Bogen = laufende Stunde, Mitte = Uhrzeit
+  // Zifferblatt einer Stempeluhr: 60 Striche = Sekunden, Bogen läuft live mit, Mitte = Uhrzeit
   const now = new Date();
-  const [h, mi] = hhmm(now).split(':').map(Number);
+  const sec = now.getSeconds() + now.getMilliseconds() / 1000;
   const R = 92, C = 2 * Math.PI * R;
   let ticks = '';
   for (let i = 0; i < 60; i++) {
     const a = (i / 60) * 2 * Math.PI, big = i % 5 === 0;
     const r1 = big ? 104 : 107, r2 = 112;
-    ticks += `<line class="${big ? 'tk tk-h' : 'tk'} ${i <= mi ? 'past' : ''}" x1="${(120 + r1 * Math.sin(a)).toFixed(1)}" y1="${(120 - r1 * Math.cos(a)).toFixed(1)}" x2="${(120 + r2 * Math.sin(a)).toFixed(1)}" y2="${(120 - r2 * Math.cos(a)).toFixed(1)}"/>`;
+    ticks += `<line data-i="${i}" class="${big ? 'tk tk-h' : 'tk'} ${i <= Math.floor(sec) ? 'past' : ''}" x1="${(120 + r1 * Math.sin(a)).toFixed(1)}" y1="${(120 - r1 * Math.cos(a)).toFixed(1)}" x2="${(120 + r2 * Math.sin(a)).toFixed(1)}" y2="${(120 - r2 * Math.cos(a)).toFixed(1)}"/>`;
   }
   return `<div class="dial" aria-hidden="true"><svg viewBox="0 0 240 240">${ticks}
     <circle class="d-track" cx="120" cy="120" r="${R}"/>
-    <circle class="d-arc" cx="120" cy="120" r="${R}" stroke-dasharray="${((mi / 60) * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 120 120)"/></svg>
-    <div class="dial-in"><span class="dial-time">${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}</span>
+    <circle class="d-arc" cx="120" cy="120" r="${R}" style="--c:${C.toFixed(1)};animation-delay:-${sec.toFixed(2)}s" transform="rotate(-90 120 120)"/>
+    <g class="d-dot" style="animation-delay:-${sec.toFixed(2)}s"><circle cx="120" cy="28" r="4.5"/></g></svg>
+    <div class="dial-in"><span class="dial-time">${hhmm(now)}</span>
     <span class="dial-date">${now.toLocaleDateString(prefs.lang === 'fr' ? 'fr-CH' : 'de-CH', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Zurich' })}</span></div></div>`;
+}
+// Login-Uhr jede Sekunde nachführen, ohne die Eingaben anzufassen
+function tickDial() {
+  const d = app.querySelector('.dial');
+  if (!d) return;
+  const now = new Date(), sec = now.getSeconds();
+  if (sec === 0) { d.outerHTML = loginDial(); return; }   // neue Minute: Bogen sauber neu starten
+  d.querySelectorAll('.tk').forEach((l) => l.classList.toggle('past', +l.dataset.i <= sec));
+  const t = d.querySelector('.dial-time');
+  if (t && t.textContent !== hhmm(now)) t.textContent = hhmm(now);
 }
 
 function viewLogin() {
@@ -933,7 +944,7 @@ app.addEventListener('click', async (e) => {
 
 // Uhr aktualisieren
 // Login-Zifferblatt jede Minute nachführen (ohne die Eingaben zu verlieren)
-setInterval(() => { if (!S.user) { const d = app.querySelector('.dial'); if (d) d.outerHTML = loginDial(); } }, 15000);
+setInterval(() => { if (!S.user) tickDial(); }, 1000);
 setInterval(() => { if (S.user && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !slide) render(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && S.user) countUpNext = true;
