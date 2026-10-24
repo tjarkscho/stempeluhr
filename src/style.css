@@ -318,3 +318,23 @@ header .icon svg { display: block; }
 @media (prefers-reduced-motion: reduce) {
   .confirm, .confirm-box, .cc-ring, .cc-check, .slider-knob svg { animation-duration: .01s !important; animation-delay: 0s !important; }
 }
+
+/* ---------------- Begrüssung ---------------- */
+.greet { padding: 2px 4px 12px; }
+.greet h2 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+.greet p { margin: 3px 0 0; color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+
+/* ---------------- Sekundenpunkt im Ring ---------------- */
+.ring .sec { transform-box: view-box; transform-origin: 100px 100px; animation: sec-rot 60s linear infinite; }
+.ring .sec circle { fill: var(--card); stroke: var(--ring); stroke-width: 2.5; filter: drop-shadow(0 0 2px rgba(0,0,0,.25)); }
+@keyframes sec-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ring .sec { animation: none; } }
+
+/* ---------------- Kalender-Heatmap (Farbton) ---------------- */
+:root, [data-theme="weiss"], [data-theme="creme"] { --heat-s: 72%; --heat-l: 80%; --heat-t: #1d2410; }
+[data-theme="dunkel"], [data-theme="dunkelblau"] { --heat-s: 55%; --heat-l: 30%; --heat-t: #f2f5ea; }
+.cd.heat { background: hsl(var(--h) var(--heat-s) var(--heat-l)); color: var(--heat-t); }
+.cd.heat.we { background: hsl(var(--h) var(--heat-s) var(--heat-l)); }
+.heat-legend { display: flex; align-items: center; gap: 8px; margin: 12px 2px 0; font-size: 12px; color: var(--muted); }
+.heat-legend i { flex: 1; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, hsl(38 var(--heat-s) var(--heat-l)), hsl(140 var(--heat-s) var(--heat-l)) 66%, hsl(0 var(--heat-s) var(--heat-l))); }

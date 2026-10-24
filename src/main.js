@@ -7,7 +7,7 @@ import {
 } from './lib/time.js';
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
-import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt } from './lib/calc.js';
+import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt, dayRecord, lawBreak } from './lib/calc.js';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -125,10 +125,14 @@ async function loadReports() {
   S.reports = data;
 }
 async function loadAll() {
-  loadCache(); render();                      // sofort aus dem Cache anzeigen
+  loadCache();
+  const hadCache = S.entries.length > 0;
+  countUpNext = hadCache;                     // mit Cache sofort hochzählen, sonst nach dem Laden
+  render();                      // sofort aus dem Cache anzeigen
   await flushQueue();
   try { await Promise.all([loadEntries(), loadAbsences(), loadReports()]); saveCache(); }
   catch (e) { if (!isNetErr(e)) toast(T().loadFailed + e.message, true); }
+  if (!hadCache) countUpNext = true;
   render();
 }
 
@@ -265,7 +269,19 @@ function viewStamp() {
   const weekDiff = wk.diffToDate + live;
   const saldo = saldoThrough(mondayOf(today), S.byDay, S.absences, now) + live;
   const need = st.state !== 'off' ? Math.max(0, (t.soll - t.credit) - st.total) : null;
-  const sg = (m) => `<b class="${m < 0 ? 'neg' : m > 0 ? 'pos' : ''}">${fmtMin(m, true)}</b>`;
+  const sg = (m) => `<b class="${m < 0 ? 'neg' : m > 0 ? 'pos' : ''}" data-count="${m}" data-signed="1">${fmtMin(m, true)}</b>`;
+  // Begrüssung + voraussichtlicher Feierabend (inkl. noch fehlender gesetzlicher Pause)
+  const hr = +hhmm(now).slice(0, 2);
+  const name = CONFIG.employee.split(' ')[0];
+  let endTxt = '';
+  if (st.state !== 'off') {
+    const target = Math.max(0, t.soll - t.credit);
+    if (target && need === 0) endTxt = L.sollReached;
+    else if (target) {
+      const extra = Math.max(0, lawBreak(target) - st.pause);
+      endTxt = st.state === 'break' ? L.endAfterBreak(fmtMin(need)) : L.endAt(hhmm(new Date(now.getTime() + (need + extra) * 60000)));
+    }
+  } else if (st.in) endTxt = L.niceEvening;
   let buttons = '';
   if (st.state === 'off') buttons = stampControl('in', 'go', L.clockIn, L.slideIn);
   else if (st.state === 'work') buttons = `
@@ -279,9 +295,10 @@ function viewStamp() {
   return `
   ${pend ? `<div class="offline">${ICON.cloud}<span>${T().pending(pend)}</span></div>` : ''}
   ${forgot ? `<div class="warn" data-act="edit" data-day="${forgot}">${ICON.warn}<span>${L.forgot(fmtDate(forgot))}</span></div>` : ''}
+  <div class="greet"><h2>${L.greet(hr)}, ${esc(name)}</h2>${endTxt ? `<p>${endTxt}</p>` : ''}</div>
   <section class="card hero">
     <div class="state s-${st.state}"><span class="dot"></span>${stateTxt}</div>
-    ${ring(st.total, Math.max(0, t.soll - t.credit), L)}
+    ${ring(st.total, Math.max(0, t.soll - t.credit), L, st.state === 'work')}
     <div class="sub">${L.workedToday}${t.label ? ` · ${esc(label(t.label))}` : ''}</div>
     <div class="facts">
       <div><span>${L.in}</span><b>${st.in ? hhmm(st.in) : '–'}</b></div>
@@ -366,7 +383,7 @@ function viewArchive() {
 }
 
 // ---------------- Ring ----------------
-function ring(worked, target, L) {
+function ring(worked, target, L, running = false) {
   const R = 84, CIRC = 2 * Math.PI * R;
   const ref = target > 0 ? target : CONFIG.sollDayMin;          // Wochenende/Feiertag: alles ist Überzeit
   const base = target > 0 ? Math.min(worked / target, 1) : 0;
@@ -380,8 +397,8 @@ function ring(worked, target, L) {
     <svg viewBox="0 0 200 200"><g transform="rotate(-90 100 100)">
       <circle class="r-track" cx="100" cy="100" r="${R}"/>
       ${arc(base, 'r-base')}${arc(over, 'r-over')}
-    </g></svg>
-    <div class="ring-in"><div class="clock">${fmtMin(worked)}</div><div class="ring-sub">${sub}</div></div>
+    </g>${running ? (() => { const n = new Date(); return `<g class="sec" style="animation-delay:-${(n.getSeconds() + n.getMilliseconds() / 1000).toFixed(2)}s"><circle cx="100" cy="16" r="5"/></g>`; })() : ''}</svg>
+    <div class="ring-in"><div class="clock" data-count="${worked}">${fmtMin(worked)}</div><div class="ring-sub">${sub}</div></div>
   </div>`;
 }
 
@@ -623,9 +640,20 @@ function viewDrawer() {
     const wd = weekday(d);
     const hol = holidayName(d);
     const a = S.absences.get(d);
-    const cls = ['cd', inMonth ? '' : 'out', wd >= 5 ? 'we' : '', hol ? 'hol' : '', a ? 'a-' + a : '', d === today ? 'today' : ''].join(' ');
+    // Heatmap: Farbton nach Arbeitszeit (gelb wenig -> grün Soll -> rot viel Überzeit)
+    let heat = '';
+    if (inMonth && d <= today && S.byDay.get(d)) {
+      const r = dayRecord(d, S.byDay, S.absences);
+      if (r.total > 0) {
+        const ref = r.soll || CONFIG.sollDayMin;
+        const q = r.total / ref;
+        const h = q <= 1 ? 38 + 102 * q : Math.max(0, 140 - 280 * (q - 1));
+        heat = `style="--h:${Math.round(h)}" data-min="${fmtMin(r.total)}"`;
+      }
+    }
+    const cls = ['cd', inMonth ? '' : 'out', wd >= 5 ? 'we' : '', hol ? 'hol' : '', a ? 'a-' + a : '', d === today ? 'today' : '', heat ? 'heat' : ''].join(' ');
     const clickable = inMonth && wd < 5 && !hol;
-    cells += `<div class="${cls}" ${clickable ? `data-act="abs" data-day="${d}"` : ''} title="${esc(label(hol) || '')}">
+    cells += `<div class="${cls}" ${heat} ${clickable ? `data-act="abs" data-day="${d}"` : ''} title="${esc(label(hol) || '')}">
       <span>${+d.slice(8)}</span>${a && inMonth ? `<i>${L.absShort[a]}</i>` : hol && inMonth ? `<i>${L.absShort.hol}</i>` : ''}</div>`;
   }
   const yearCount = [...S.absences.entries()].filter(([d]) => d.startsWith(String(y)))
@@ -642,6 +670,7 @@ function viewDrawer() {
     </div>
     <div class="cal">${L.daysShort.map((d) => `<div class="ch">${d}</div>`).join('')}${cells}</div>
     <div class="legend"><span><i class="a-ferien">${L.absShort.ferien}</i> ${L.absF}</span><span><i class="a-ferien_halb">½</i> ${L.absH}</span><span><i class="a-krank">${L.absShort.krank}</i> ${L.absK}</span><span><i class="hol">${L.absShort.hol}</i> ${L.absFT}</span></div>
+    <div class="heat-legend"><span>${L.heatLow}</span><i></i><span>${L.heatHigh}</span></div>
     <p class="hint">${L.absHint}</p>
     <p class="hint"><b>${L.vacDays(y, yearCount)}</b></p>
   </aside>`;
@@ -796,6 +825,25 @@ app.addEventListener('touchend', () => {
   render();
 });
 
+// Zahlen beim Öffnen kurz hochzählen lassen
+let countUpNext = false;
+function countUp() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const els = [...app.querySelectorAll('.page.active [data-count]')];
+  if (!els.length) return;
+  const t0 = performance.now(), D = 900;
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 3);
+    for (const el of els) {
+      if (!el.isConnected) continue;
+      const v = +el.dataset.count;
+      el.textContent = fmtMin(Math.round(v * e), !!el.dataset.signed);
+    }
+    if (k < 1 && els.some((el) => el.isConnected)) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function render() {
   if (!S.user) {
     app.innerHTML = viewLogin() + (S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : '');
@@ -818,6 +866,7 @@ function render() {
   ${S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : ''}`;
   if (enterAnim) { app.querySelectorAll(enterAnim === 'drawer' ? '.drawer, .drawer-bg' : '.sheet, .modal').forEach((e) => e.classList.add('enter')); enterAnim = null; }
   animateAfterRender();
+  if (countUpNext && S.view === 'stamp') { countUpNext = false; countUp(); }
   if (active) app.querySelector(`[data-ed="${active.ed}"][data-i="${active.i}"]`)?.focus();
 }
 
@@ -887,6 +936,7 @@ app.addEventListener('click', async (e) => {
 setInterval(() => { if (!S.user) { const d = app.querySelector('.dial'); if (d) d.outerHTML = loginDial(); } }, 15000);
 setInterval(() => { if (S.user && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !slide) render(); }, 30000);
 document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && S.user) countUpNext = true;
   if (!document.hidden && S.user) flushQueue().then(() => loadEntries()).then(render).catch(() => render());
 });
 window.addEventListener('online', () => { if (S.user) flushQueue().then(render); });
