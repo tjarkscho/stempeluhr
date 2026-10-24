@@ -1,0 +1,153 @@
+// Monatliches Spesenblatt – gleicher ruhiger Stil wie Wochen-/Monats-PDF, Belegfotos im Anhang
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { CONFIG } from '../config.js';
+import { fmtDate } from './time.js';
+import { expenseTotals, fmtChf, CATEGORIES } from './receipt.js';
+
+const C = {
+  text: rgb(0.11, 0.12, 0.14),
+  muted: rgb(0.48, 0.5, 0.54),
+  faint: rgb(0.72, 0.73, 0.76),
+  line: rgb(0.88, 0.89, 0.91),
+  band: rgb(0.965, 0.968, 0.975),
+  neg: rgb(0.68, 0.16, 0.13),
+};
+const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+export const CAT_DE = { essen: 'Verpflegung', fahrt: 'Fahrt', material: 'Material', uebernachtung: 'Übernachtung', anderes: 'Anderes' };
+
+// Helvetica (WinAnsi) kann nicht alle Zeichen – Unbekanntes ersetzen statt abstürzen
+const safe = (s) => String(s ?? '').replace(/[’‘]/g, "'").replace(/[“”„]/g, '"').replace(/[–—]/g, '-')
+  .replace(/[^\x20-\x7E\xA0-\xFF€]/g, '');
+
+/**
+ * @param ym     'YYYY-MM'
+ * @param items  [{ id, day, amount, category, note }] (nach Datum sortiert)
+ * @param photos Map(id -> Uint8Array JPG/PNG)
+ * @param logo   Uint8Array | null
+ * @param opts   { draft: bool, stamp: 'Stand …' }
+ */
+export async function buildExpensePdf(ym, items, photos = new Map(), logo = null, opts = {}) {
+  const [y, m] = ym.split('-').map(Number);
+  const name = `${MONTHS[m - 1]} ${y}`;
+  const doc = await PDFDocument.create();
+  doc.setTitle(`Spesenabrechnung ${name}`);
+  doc.setAuthor(CONFIG.employee);
+  const W = 595.28, H = 841.89, M = 50;
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  let img = null;
+  if (logo) { try { img = (logo[0] === 0x89 && logo[1] === 0x50) ? await doc.embedPng(logo) : await doc.embedJpg(logo); } catch { img = null; } }
+
+  let page;
+  const text = (s, x, y_, { f = font, size = 9, color = C.text, align = 'left', maxW } = {}) => {
+    let str = safe(s);
+    if (maxW && f.widthOfTextAtSize(str, size) > maxW) {
+      while (str.length > 1 && f.widthOfTextAtSize(str + '...', size) > maxW) str = str.slice(0, -1);
+      str += '...';
+    }
+    const tw = f.widthOfTextAtSize(str, size);
+    page.drawText(str, { x: align === 'right' ? x - tw : align === 'center' ? x - tw / 2 : x, y: y_, size, font: f, color });
+  };
+  const hline = (y_, t = 0.5, color = C.line, x1 = M, x2 = W - M) => page.drawLine({ start: { x: x1, y: y_ }, end: { x: x2, y: y_ }, thickness: t, color });
+  const footer = (n) => {
+    hline(M - 6, 0.4);
+    text(`${CONFIG.employee} · ${CONFIG.company}`, M, M - 19, { size: 7.5, color: C.faint });
+    text(`Spesen ${name} · Seite ${n}`, W - M, M - 19, { size: 7.5, color: C.faint, align: 'right' });
+  };
+  let pageNo = 0;
+  const newPage = () => { page = doc.addPage([W, H]); pageNo++; footer(pageNo); };
+
+  // ---- Kopf ----
+  newPage();
+  let yy = H - M;
+  if (img) {
+    const s = Math.min(32 / img.height, 150 / img.width);
+    page.drawImage(img, { x: M, y: yy - img.height * s, width: img.width * s, height: img.height * s });
+  }
+  text(opts.draft ? 'SPESENABRECHNUNG · ZWISCHENSTAND' : 'SPESENABRECHNUNG', W - M, yy - 10, { f: bold, size: 8, color: opts.draft ? C.neg : C.muted, align: 'right' });
+  text(name, W - M, yy - 32, { f: bold, size: 20, align: 'right' });
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  text(`01.${String(m).padStart(2, '0')}.${y} – ${last}.${String(m).padStart(2, '0')}.${y}${opts.draft ? ` · ${opts.stamp || ''}` : ''}`, W - M, yy - 46, { size: 9, color: C.muted, align: 'right' });
+  yy -= 76;
+  const meta = [['Mitarbeiter', CONFIG.employee], ['Firma', CONFIG.company], ['Belege', String(items.length)]];
+  const colW = (W - 2 * M) / 3;
+  meta.forEach(([k, v], i) => {
+    text(k.toUpperCase(), M + i * colW, yy, { size: 7, color: C.muted, f: bold });
+    text(v, M + i * colW, yy - 13, { size: 9.5 });
+  });
+  yy -= 28;
+  hline(yy);
+
+  // ---- Tabelle ----
+  const X = { nr: M, date: M + 30, cat: M + 96, note: M + 180, amt: W - M };
+  const head = () => {
+    yy -= 20;
+    for (const [h, x, a] of [['Nr.', X.nr], ['Datum', X.date], ['Kategorie', X.cat], ['Beschreibung', X.note], ['Betrag CHF', X.amt, 'right']])
+      text(h.toUpperCase(), x, yy, { size: 6.5, f: bold, color: C.muted, align: a });
+    yy -= 8;
+    hline(yy, 0.8, C.faint);
+  };
+  head();
+  const rowH = 20;
+  items.forEach((it, i) => {
+    if (yy - rowH < M + 30) { newPage(); yy = H - M; head(); }
+    yy -= rowH;
+    text(String(i + 1), X.nr, yy + 7, { color: C.muted });
+    text(fmtDate(it.day), X.date, yy + 7);
+    text(CAT_DE[it.category] || CAT_DE.anderes, X.cat, yy + 7, { color: C.muted });
+    text(it.note || '–', X.note, yy + 7, { maxW: X.amt - X.note - 70, color: it.note ? C.text : C.faint });
+    text(fmtChf(it.amount), X.amt, yy + 7, { align: 'right', f: bold });
+    hline(yy, 0.4);
+  });
+  if (!items.length) { yy -= rowH; text('Keine Belege in diesem Monat.', M, yy + 7, { color: C.muted }); }
+
+  // ---- Zusammenfassung ----
+  const tot = expenseTotals(items);
+  const cats = CATEGORIES.filter((c) => tot.byCat[c] > 0);
+  const need = 30 + 54 + 110;
+  if (yy - need < M + 20) { newPage(); yy = H - M; }
+  yy -= 30 + 54;
+  const cells = [...cats.map((c) => [CAT_DE[c], fmtChf(tot.byCat[c])]), ['Total CHF', fmtChf(tot.total)]].slice(-5);
+  const bandH = 54, cw = (W - 2 * M) / cells.length;
+  page.drawRectangle({ x: M, y: yy, width: W - 2 * M, height: bandH, color: C.band });
+  cells.forEach(([k, v], i) => {
+    const x = M + 14 + i * cw, isTot = i === cells.length - 1;
+    text(k.toUpperCase(), x, yy + bandH - 19, { size: 7, f: bold, color: C.muted });
+    text(v, x, yy + 13, { size: isTot ? 16 : 13, f: bold, color: C.text });
+    if (i) page.drawLine({ start: { x: M + i * cw, y: yy + 11 }, end: { x: M + i * cw, y: yy + bandH - 11 }, thickness: 0.5, color: C.line });
+  });
+
+  // ---- Unterschriften ----
+  yy -= 62;
+  const sw = (W - 2 * M - 40) / 2;
+  for (const [i, lab] of ['Datum, Unterschrift Mitarbeiter', 'Datum, Visum Vorgesetzte/r'].entries()) {
+    const x = M + i * (sw + 40);
+    page.drawLine({ start: { x, y: yy }, end: { x: x + sw, y: yy }, thickness: 0.6, color: C.faint });
+    text(lab, x, yy - 12, { size: 7.5, color: C.muted });
+  }
+  yy -= 34;
+  if (opts.draft) text(`Zwischenstand – ${opts.stamp || ''}. Noch kein abgeschlossenes Spesenblatt.`, M, yy, { size: 7.5, color: C.muted });
+  else if (items.length) text('Belegfotos im Anhang, nummeriert wie in der Tabelle.', M, yy, { size: 7.5, color: C.muted });
+
+  // ---- Belegfotos: 2 pro Seite ----
+  const withPhoto = items.map((it, i) => ({ it, nr: i + 1, bytes: photos.get(it.id) })).filter((x) => x.bytes);
+  for (let k = 0; k < withPhoto.length; k += 2) {
+    newPage();
+    const slotH = (H - 2 * M - 20) / 2;
+    for (let j = 0; j < 2 && k + j < withPhoto.length; j++) {
+      const { it, nr, bytes } = withPhoto[k + j];
+      const top = H - M - j * (slotH + 20);
+      text(`Beleg ${nr}`, M, top - 10, { f: bold, size: 10 });
+      text(`${fmtDate(it.day)} · ${CAT_DE[it.category] || ''} · CHF ${fmtChf(it.amount)}${it.note ? ` · ${it.note}` : ''}`, M + 56, top - 10,
+        { size: 9, color: C.muted, maxW: W - 2 * M - 56 });
+      let ph = null;
+      try { ph = (bytes[0] === 0x89 && bytes[1] === 0x50) ? await doc.embedPng(bytes) : await doc.embedJpg(bytes); } catch { ph = null; }
+      const boxW = W - 2 * M, boxH = slotH - 26;
+      if (!ph) { text('Foto konnte nicht gelesen werden.', M, top - 40, { color: C.neg }); continue; }
+      const s = Math.min(boxW / ph.width, boxH / ph.height);
+      const w = ph.width * s, h = ph.height * s;
+      page.drawImage(ph, { x: M + (boxW - w) / 2, y: top - 22 - h, width: w, height: h });
+    }
+  }
+  return doc.save();
+}

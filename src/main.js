@@ -7,6 +7,7 @@ import {
 } from './lib/time.js';
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
+import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, lastWorkday } from './lib/receipt.js';
 import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt, dayRecord, lawBreak } from './lib/calc.js';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL;
@@ -38,6 +39,11 @@ const S = {
   drawer: false,
   settings: false,
   archTab: 'weeks',
+  expMonth: dayKey(new Date()).slice(0, 7),
+  expenses: [],
+  expReports: [],
+  thumbs: {},
+  exp: null,      // offener Beleg { id?, day, amount, category, note, blob?, url, ocr }
   chartSel: null,
   editor: null,   // { day, rows: [{id?, kind, time}] }
   busy: false,
@@ -58,6 +64,7 @@ const ICON = {
   warn: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>',
   cloud: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5H7z"/><path d="M4 4l16 16"/></svg>',
   face: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 9.5v1M15 9.5v1M12 9.5v3.5h-1M9.5 16c1.4 1 3.6 1 5 0"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.6-2.2A1.5 1.5 0 0 1 9.8 5h4.4a1.5 1.5 0 0 1 1.2.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   eye: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   out: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 16l-4-4 4-4M5 12h10"/></svg>',
 };
@@ -133,6 +140,7 @@ async function loadAll() {
   countUpNext = hadCache;                     // mit Cache sofort hochzählen, sonst nach dem Laden
   render();                      // sofort aus dem Cache anzeigen
   await flushQueue();
+  loadExpenses().catch(() => {});
   try { await Promise.all([loadEntries(), loadAbsences(), loadReports()]); saveCache(); }
   catch (e) { if (!isNetErr(e)) toast(T().loadFailed + e.message, true); }
   if (!hadCache) countUpNext = true;
@@ -511,7 +519,7 @@ async function periodPdf(key) {
   } catch (e) { S.busy = false; toast(T().pdfError + e.message, true); }
 }
 
-async function download(path) {
+async function download(path, name) {
   if (S.busy) return;
   S.busy = true; render();
   try {
@@ -519,7 +527,7 @@ async function download(path) {
     if (error) throw error;
     const bytes = new Uint8Array(await data.arrayBuffer());
     S.busy = false; render();
-    await saveFile(bytes, `Arbeitszeitnachweis_${path.split('/').pop()}`);
+    await saveFile(bytes, name || `Arbeitszeitnachweis_${path.split('/').pop()}`);
   } catch (e) { S.busy = false; render(); toast(T().downloadFailed + (e.message || e), true); }
 }
 
@@ -766,13 +774,210 @@ function viewSettings() {
   </div></div>`;
 }
 
+// ---------------- Spesen ----------------
+async function loadExpenses() {
+  const [ex, rep_] = await Promise.all([
+    sb.from('expenses').select('*').order('day', { ascending: false }).order('created_at', { ascending: false }),
+    sb.from('expense_reports').select('*').order('month', { ascending: false }),
+  ]);
+  if (ex.error) throw ex.error;
+  S.expenses = ex.data;
+  S.expReports = rep_.data || [];
+  const missing = S.expenses.map((x) => x.photo_path).filter((p) => p && !S.thumbs[p]);
+  if (missing.length) {
+    const { data } = await sb.storage.from('receipts').createSignedUrls(missing, 6 * 3600);
+    for (const d of data || []) if (d.signedUrl) S.thumbs[d.path] = d.signedUrl;
+  }
+  if (S.view === 'expenses' && !S.exp) render();
+}
+
+const monthLabel = (ym) => `${T().months[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}`;
+
+function viewExpenses() {
+  const L = T();
+  const ym = S.expMonth;
+  const items = S.expenses.filter((x) => x.day.startsWith(ym));
+  const tot = expenseTotals(items);
+  const lwd = lastWorkday(ym, (d) => !!holidayName(d));
+  const today = dayKey(new Date());
+  const rep = S.expReports.find((r) => r.month === ym);
+  const curYm = today.slice(0, 7);
+  const sub = rep ? L.expSheetDone(fmtDate(rep.created_at.slice(0, 10)))
+    : ym === curYm ? L.expSheetOn(fmtDate(lwd)) : ym < curYm ? (items.length ? L.expSheetSoon : '') : '';
+  const cats = CATEGORIES.filter((c) => tot.byCat[c] > 0);
+  return `
+  <div class="weeknav">
+    <button class="icon" data-act="expprev">${ICON.prev}</button>
+    <div><b>${monthLabel(ym)}</b><small>${L.expCount(items.length)}</small></div>
+    <button class="icon" data-act="expnext" ${ym >= curYm ? 'disabled' : ''}>${ICON.next}</button>
+  </div>
+  <section class="card exp-sum">
+    <div class="exp-total"><span>CHF</span>${fmtChf(tot.total)}</div>
+    ${sub ? `<p class="exp-sub">${sub}</p>` : ''}
+    ${cats.length > 1 ? `<div class="exp-cats">${cats.map((c) => `<span class="cat-${c}"><i></i>${L.cat[c]} ${fmtChf(tot.byCat[c])}</span>`).join('')}</div>` : ''}
+  </section>
+  <label class="big go cam">${ICON.camera}<span>${L.expPhoto}</span><input type="file" accept="image/*" capture="environment" data-exp-file hidden /></label>
+  <label class="link exp-pick">${L.expPick}<input type="file" accept="image/*" data-exp-file hidden /></label>
+  ${items.length ? `<section class="card pad0"><ul class="list exp-list">${items.map((x) => `
+    <li data-act="expopen" data-id="${x.id}">
+      <span class="thumb">${x.photo_path && S.thumbs[x.photo_path] ? `<img src="${esc(S.thumbs[x.photo_path])}" alt="" loading="lazy" />` : ICON.camera}</span>
+      <div><b>${esc(x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
+      <div class="r"><b>${fmtChf(x.amount)}</b></div>
+    </li>`).join('')}</ul></section>` : `<p class="hint center-t">${L.expEmpty}</p>`}
+  ${items.length ? `<button class="btn ghost" data-act="expdraft" ${S.busy ? 'disabled' : ''}>${L.expDraft}</button>` : ''}
+  ${S.expReports.length ? `<h3 class="exp-h">${L.expSheets}</h3><section class="card pad0"><ul class="list">${S.expReports.map((r) => `
+    <li data-act="dl" data-path="${esc(r.pdf_path)}" data-name="Spesen_${r.month}.pdf">
+      <div><b>${monthLabel(r.month)}</b><small>${L.expCount(r.count)}</small></div>
+      <div class="r"><b>CHF ${fmtChf(r.total)}</b></div><span class="dl">${ICON.download}</span>
+    </li>`).join('')}</ul></section>` : ''}`;
+}
+
+function viewExpSheet() {
+  const L = T(), x = S.exp;
+  const status = { run: L.expOcrRun, ok: L.expOcrOk, fail: L.expOcrFail }[x.ocr] || '';
+  return `<div class="modal"><div class="sheet exp-sheet">
+    <div class="sheethead"><b>${x.id ? L.expEdit : L.expNew}</b><button class="icon" data-act="expclose">${ICON.close}</button></div>
+    ${x.url ? `<img class="exp-photo" src="${esc(x.url)}" alt="" />` : ''}
+    ${status ? `<p class="exp-ocr ${x.ocr}">${x.ocr === 'run' ? '<i class="spin"></i>' : ''}<span>${status}</span></p>` : ''}
+    <div class="exp-grid">
+      <label class="fld"><span>${L.expAmount}</span><input data-exp="amount" inputmode="decimal" enterkeyhint="done" value="${esc(x.amount ?? '')}" placeholder="0.00" /></label>
+      <label class="fld"><span>${L.expDate}</span><input type="date" data-exp="day" value="${esc(x.day)}" max="${dayKey(new Date())}" /></label>
+    </div>
+    <span class="fld-l">${L.expCat}</span>
+    <div class="chips">${CATEGORIES.map((c) => `<button type="button" class="chip cat-${c} ${x.category === c ? 'on' : ''}" data-act="expcat" data-v="${c}"><i></i>${L.cat[c]}</button>`).join('')}</div>
+    <label class="fld"><span>${L.expNote}</span><input data-exp="note" maxlength="120" value="${esc(x.note || '')}" placeholder="${L.expNoteHint}" /></label>
+    <button class="btn" data-act="expsave" ${S.busy ? 'disabled' : ''}>${L.save}</button>
+    ${x.id ? `<button class="link danger" data-act="expdel">${L.expDelete}</button>` : ''}
+  </div></div>`;
+}
+
+// Foto verkleinern (max. 1600 px, JPEG) – spart Speicher und lädt schnell
+async function shrinkPhoto(file) {
+  let src;
+  try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch {
+    src = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+  }
+  const w0 = src.width, h0 = src.height, k = Math.min(1, 1600 / Math.max(w0, h0));
+  const c = document.createElement('canvas');
+  c.width = Math.round(w0 * k); c.height = Math.round(h0 * k);
+  c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob(res, 'image/jpeg', 0.82));
+}
+
+function newExpense(file) {
+  S.exp = { day: dayKey(new Date()), amount: '', category: 'essen', note: '', url: URL.createObjectURL(file), ocr: 'run', touched: {} };
+  enterAnim = 'sheet';
+  render();
+  (async () => {
+    const exp = S.exp;
+    try {
+      exp.blob = await shrinkPhoto(file);
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker('deu');
+      const { data } = await worker.recognize(exp.blob);
+      await worker.terminate();
+      const r = parseReceipt(data.text);
+      if (S.exp !== exp) return;
+      if (r.amount != null && !exp.touched.amount) exp.amount = r.amount.toFixed(2);
+      if (r.day && !exp.touched.day) exp.day = r.day;
+      exp.ocr = r.amount != null ? 'ok' : 'fail';
+    } catch (e) {
+      console.warn('OCR', e);
+      if (!exp.blob) try { exp.blob = await shrinkPhoto(file); } catch { exp.blob = file; }
+      exp.ocr = 'fail';
+    }
+    if (S.exp !== exp) return;
+    // nur die betroffenen Felder aktualisieren, damit Eingaben/Fokus erhalten bleiben
+    const sh = app.querySelector('.exp-sheet');
+    if (!sh) return;
+    const a = sh.querySelector('[data-exp=amount]'), d = sh.querySelector('[data-exp=day]');
+    if (!exp.touched.amount && a) a.value = exp.amount;
+    if (!exp.touched.day && d) d.value = exp.day;
+    const st = sh.querySelector('.exp-ocr');
+    if (st) { st.className = `exp-ocr ${exp.ocr}`; st.innerHTML = `<span>${exp.ocr === 'ok' ? T().expOcrOk : T().expOcrFail}</span>`; }
+    if (exp.ocr === 'ok') a?.classList.add('flash');
+  })();
+}
+
+function openExpense(id) {
+  const x = S.expenses.find((e) => e.id === id);
+  if (!x) return;
+  S.exp = { id, day: x.day, amount: Number(x.amount).toFixed(2), category: x.category, note: x.note, url: x.photo_path ? S.thumbs[x.photo_path] : null, photo_path: x.photo_path, touched: {} };
+  enterAnim = 'sheet';
+  render();
+}
+
+async function saveExpense() {
+  const L = T(), x = S.exp;
+  const amount = Number(String(x.amount).replace(/['’\s]/g, '').replace(',', '.'));
+  if (!(amount > 0)) { toast(L.expNeedAmount, true); app.querySelector('[data-exp=amount]')?.focus(); return; }
+  if (!x.day) { toast(L.expNeedDate, true); return; }
+  S.busy = true; render();
+  try {
+    const row = { day: x.day, amount: Math.round(amount * 100) / 100, category: x.category, note: (x.note || '').trim() };
+    if (x.id) {
+      const { error } = await sb.from('expenses').update(row).eq('id', x.id);
+      if (error) throw error;
+    } else {
+      if (!x.blob && x.url) x.blob = await (await fetch(x.url)).blob();
+      const path = `${S.user.id}/${crypto.randomUUID()}.jpg`;
+      const up = await sb.storage.from('receipts').upload(path, x.blob, { contentType: 'image/jpeg' });
+      if (up.error) throw up.error;
+      const { error } = await sb.from('expenses').insert({ ...row, photo_path: path });
+      if (error) { await sb.storage.from('receipts').remove([path]); throw error; }
+      S.thumbs[path] = x.url;
+    }
+    S.expMonth = x.day.slice(0, 7);
+    S.exp = null; S.busy = false;
+    haptic();
+    await loadExpenses();
+    render();
+    toast(x.id ? L.expSaved : L.expAdded(fmtChf(row.amount)));
+  } catch (e) { S.busy = false; render(); toast(L.error + (e.message || e), true); }
+}
+
+async function deleteExpense(btn) {
+  const L = T();
+  if (!btn.dataset.sure) { btn.dataset.sure = '1'; btn.textContent = L.expDeleteSure; return; }
+  const x = S.exp;
+  S.busy = true; render();
+  try {
+    const { error } = await sb.from('expenses').delete().eq('id', x.id);
+    if (error) throw error;
+    if (x.photo_path) await sb.storage.from('receipts').remove([x.photo_path]);
+    S.exp = null; S.busy = false;
+    await loadExpenses(); render();
+  } catch (e) { S.busy = false; render(); toast(L.error + (e.message || e), true); }
+}
+
+async function expenseDraftPdf() {
+  if (S.busy) return;
+  S.busy = true; render();
+  try {
+    const ym = S.expMonth;
+    const items = S.expenses.filter((x) => x.day.startsWith(ym)).sort((a, b) => a.day.localeCompare(b.day) || a.created_at.localeCompare(b.created_at));
+    const photos = new Map();
+    await Promise.all(items.filter((x) => x.photo_path).map(async (x) => {
+      const { data } = await sb.storage.from('receipts').download(x.photo_path);
+      if (data) photos.set(x.id, new Uint8Array(await data.arrayBuffer()));
+    }));
+    const { buildExpensePdf } = await import('./lib/pdf-expense.js');
+    const now = new Date();
+    const bytes = await buildExpensePdf(ym, items, photos, await getLogo(),
+      { draft: true, stamp: `Stand ${fmtDate(dayKey(now))} ${hhmm(now)}` });
+    S.busy = false; render();
+    await saveFile(bytes, `Spesen_${ym}_Zwischenstand.pdf`);
+  } catch (e) { S.busy = false; render(); toast(T().error + (e.message || e), true); }
+}
+
 // ---------------- Rendern ----------------
 // ---------------- Seiten-Slider + Animationen ----------------
-const VIEWS = ['stamp', 'week', 'archive'];
+const VIEWS = ['stamp', 'week', 'expenses', 'archive'];
 const EASE = 'cubic-bezier(.22,1,.36,1)';               // weiches Auslaufen (easeOutQuint)
 let shownIdx = 0, dragDx = 0, enterAnim = null;   // enterAnim: 'sheet' | 'drawer' – nur beim Öffnen animieren
 const segPrev = {};
-const viewOf = (v) => (v === 'stamp' ? viewStamp() : v === 'week' ? viewWeek() : viewArchive());
+const viewOf = (v) => (v === 'stamp' ? viewStamp() : v === 'week' ? viewWeek() : v === 'expenses' ? viewExpenses() : viewArchive());
 
 function animateAfterRender() {
   const pager = app.querySelector('.pager');
@@ -838,9 +1043,17 @@ app.addEventListener('touchend', () => {
   if (tc.dx < -w * 0.22 || v < -0.45) next = Math.min(VIEWS.length - 1, idx + 1);
   if (tc.dx > w * 0.22 || v > 0.45) next = Math.max(0, idx - 1);
   dragDx = tc.dx;
+  if (VIEWS[next] === 'expenses' && S.view !== 'expenses') loadExpenses().catch(() => {});
   if (VIEWS[next] === 'archive' && S.view !== 'archive') loadReports().then(() => setTimeout(render, 500)).catch(() => {});
   S.view = VIEWS[next];
   render();
+});
+
+app.addEventListener('input', (e) => {
+  const t = e.target;
+  if (!t.dataset.exp || !S.exp) return;
+  S.exp[t.dataset.exp] = t.value;
+  S.exp.touched = { ...S.exp.touched, [t.dataset.exp]: true };
 });
 
 // Zahlen beim Öffnen kurz hochzählen lassen
@@ -878,10 +1091,11 @@ function render() {
     <button class="icon" data-act="settings" title="${L.settings}" aria-label="${L.settings}">${ICON.gear}</button>
     <button class="icon" data-act="logout" title="${L.logout}" aria-label="${L.logout}">${ICON.out}</button></div></header>
   <main><div class="pager">${VIEWS.map((v) => `<section class="page ${v === S.view ? 'active' : ''}"><div class="page-in">${viewOf(v)}</div></section>`).join('')}</div></main>
-  <nav><div class="tabbar"><span class="ind"></span>${tab('stamp', L.tabStamp)}${tab('week', L.tabWeek)}${tab('archive', L.tabArchive)}</div></nav>
+  <nav><div class="tabbar"><span class="ind"></span>${tab('stamp', L.tabStamp)}${tab('week', L.tabWeek)}${tab('expenses', L.tabExp)}${tab('archive', L.tabArchive)}</div></nav>
   ${S.editor ? viewEditor() : ''}
   ${S.drawer ? viewDrawer() : ''}
   ${S.settings ? viewSettings() : ''}
+  ${S.exp ? viewExpSheet() : ''}
   ${S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : ''}`;
   if (enterAnim) { app.querySelectorAll(enterAnim === 'drawer' ? '.drawer, .drawer-bg' : '.sheet, .modal').forEach((e) => e.classList.add('enter')); enterAnim = null; }
   animateAfterRender();
@@ -906,6 +1120,7 @@ app.addEventListener('submit', async (e) => {
 
 app.addEventListener('change', (e) => {
   const t = e.target;
+  if (t.matches('[data-exp-file]')) { const f = t.files?.[0]; t.value = ''; if (f) newExpense(f); return; }
   if (!t.dataset.ed || !S.editor) return;
   S.editor.rows[+t.dataset.i][t.dataset.ed] = t.value;
 });
@@ -920,7 +1135,7 @@ app.addEventListener('click', async (e) => {
   else if (a === 'out') stamp(todayInfo().st.state === 'break' ? ['break_end', 'out'] : ['out']);
   else if (a === 'pause') stamp(['break_start']);
   else if (a === 'pause_end') stamp(['break_end']);
-  else if (a === 'view') { S.view = el.dataset.v; if (S.view === 'archive') loadReports().then(() => setTimeout(render, 500)).catch(() => {}); render(); }
+  else if (a === 'view') { S.view = el.dataset.v; if (S.view === 'expenses') loadExpenses().catch(() => {}); if (S.view === 'archive') loadReports().then(() => setTimeout(render, 500)).catch(() => {}); render(); }
   else if (a === 'wprev') { S.weekMonday = addDays(S.weekMonday, -7); render(); }
   else if (a === 'wnext') { S.weekMonday = addDays(S.weekMonday, 7); render(); }
   else if (a === 'edit') openEditor(el.dataset.day);
@@ -938,7 +1153,17 @@ app.addEventListener('click', async (e) => {
   else if (a === 'abs') toggleAbsence(el.dataset.day);
   else if (a === 'genpdf') generatePdf(S.weekMonday);
   else if (a === 'draftpdf') draftPdf();
-  else if (a === 'dl') download(el.dataset.path);
+  else if (a === 'dl') download(el.dataset.path, el.dataset.name);
+  else if (a === 'expprev' || a === 'expnext') {
+    const [y, m] = S.expMonth.split('-').map(Number), d = new Date(Date.UTC(y, m - 1 + (a === 'expnext' ? 1 : -1), 1));
+    S.expMonth = d.toISOString().slice(0, 7); render();
+  }
+  else if (a === 'expopen') openExpense(el.dataset.id);
+  else if (a === 'expclose') { if (S.exp?.url?.startsWith('blob:')) URL.revokeObjectURL(S.exp.url); S.exp = null; render(); }
+  else if (a === 'expcat') { S.exp.category = el.dataset.v; app.querySelectorAll('[data-act=expcat]').forEach((b) => b.classList.toggle('on', b === el)); }
+  else if (a === 'expsave') saveExpense();
+  else if (a === 'expdel') deleteExpense(el);
+  else if (a === 'expdraft') expenseDraftPdf();
   else if (a === 'arch') { S.archTab = el.dataset.v; render(); }
   else if (a === 'rep') periodPdf(el.dataset.k);
   else if (a === 'pt') { S.chartSel = +el.dataset.i; render(); }
@@ -955,7 +1180,7 @@ app.addEventListener('click', async (e) => {
 // Uhr aktualisieren
 // Login-Zifferblatt jede Minute nachführen (ohne die Eingaben zu verlieren)
 setInterval(() => { if (!S.user || S.locked) tickDial(); }, 1000);
-setInterval(() => { if (S.user && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !slide) render(); }, 30000);
+setInterval(() => { if (S.user && !S.locked && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !S.exp && !slide) render(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && S.user) countUpNext = true;
   if (!document.hidden && S.user) flushQueue().then(() => loadEntries()).then(render).catch(() => render());

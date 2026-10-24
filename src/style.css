@@ -350,3 +350,44 @@ header .icon svg { display: block; }
 .lock .login { justify-items: center; }
 .lock .login .bio-btn { width: 100%; }
 .lock .link { margin-top: 2px; }
+
+/* ---------------- Spesen ---------------- */
+.tabbar { grid-template-columns: repeat(4, 1fr); }
+.tabbar .ind { width: 25%; }
+nav button { font-size: 15px; }
+:root { --c-essen: #e08a1e; --c-fahrt: #2f7fd6; --c-material: #7a5bd1; --c-uebernachtung: #1f9c8a; --c-anderes: #8a8f98; }
+.cat-essen { --cc: var(--c-essen); } .cat-fahrt { --cc: var(--c-fahrt); } .cat-material { --cc: var(--c-material); }
+.cat-uebernachtung { --cc: var(--c-uebernachtung); } .cat-anderes { --cc: var(--c-anderes); }
+.exp-sum { text-align: center; padding: 22px 16px 18px; }
+.exp-total { font-size: 44px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+.exp-total span { font-size: 15px; font-weight: 600; color: var(--muted); margin-right: 6px; vertical-align: 14px; letter-spacing: 0; }
+.exp-sub { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.exp-cats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin-top: 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.exp-cats i, .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--cc); margin-right: 6px; vertical-align: 1px; }
+.cam { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; }
+.exp-pick { text-align: center; font-size: 14px; }
+.exp-list .thumb { width: 46px; height: 46px; flex: 0 0 46px; border-radius: 10px; overflow: hidden; background: var(--bg); display: grid; place-items: center; color: var(--muted); }
+.exp-list .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.exp-list li > div:nth-child(2) { flex: 1; min-width: 0; }
+.exp-list li > div:nth-child(2) b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exp-list .r b { font-variant-numeric: tabular-nums; }
+.exp-h { font-size: 15px; margin: 22px 4px 8px; color: var(--muted); font-weight: 600; }
+.center-t { text-align: center; }
+.exp-sheet { display: grid; gap: 12px; }
+.exp-sheet .sheethead { margin-bottom: 0; }
+.exp-photo { width: 100%; max-height: 34vh; object-fit: contain; border-radius: 12px; background: var(--bg); }
+.exp-ocr { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.exp-ocr.ok { color: var(--pos); } .exp-ocr.fail { color: var(--pause); }
+.spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.exp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.exp-grid input[data-exp=amount] { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fld-l { font-size: 13px; color: var(--muted); padding-left: 2px; margin-bottom: -6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+  color: var(--text); font-size: 14px; cursor: pointer; transition: background .2s, border-color .2s; }
+.chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--cc); }
+.chip.on { border-color: var(--cc); background: color-mix(in srgb, var(--cc) 16%, var(--card)); font-weight: 600; }
+.link.danger { color: var(--neg); }
+input.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { 0% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--go) 45%, transparent); border-color: var(--go); } }

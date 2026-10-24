@@ -96,3 +96,18 @@ console.log('Starttag-Test OK');
   assert.equal(saldoAt('2026-10-21', by2, new Map(), n), 0);
   console.log('Monats-Test OK');
 }
+
+// ---- Kassenbon-Erkennung ----
+{
+  const { parseReceipt, lastWorkday, expenseTotals } = await import('../src/lib/receipt.js');
+  const today = new Date('2026-10-24T12:00:00');
+  const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { console.error('FAIL', m, a, b); process.exit(1); } };
+  eq(parseReceipt('COOP Pronto\n23.10.2026 12:14\nSandwich 6.50\nCola 2,90\nTOTAL CHF 9.40\nBar 20.00\nRückgeld 10.60\nMwSt 2.6% 0.24', today), { amount: 9.4, day: '2026-10-23' }, 'coop');
+  eq(parseReceipt('Restaurant Lac\nDate: 21/10/26\n2x Plat du jour 2 x 19.50 39.00\nMontant à payer CHF 43.00\nTVA 8.1% 3.22', today), { amount: 43, day: '2026-10-21' }, 'fr');
+  eq(parseReceipt('Shell Gland\n18.10.2026\nBleifrei 95 45.12 l\nCHF 89.30\nKarte Visa', today), { amount: 89.3, day: '2026-10-18' }, 'tank');
+  eq(parseReceipt('Hotel Alpina\nTotal 1\'240.00\n12.10.2026', today), { amount: 1240, day: '2026-10-12' }, 'tausender');
+  eq(lastWorkday('2026-10'), '2026-10-30', 'lwd-okt');
+  eq(lastWorkday('2026-12', (d) => d === '2026-12-31'), '2026-12-30', 'lwd-dez');
+  eq(expenseTotals([{ amount: 0.1, category: 'essen' }, { amount: 0.2, category: 'essen' }, { amount: 5, category: 'fahrt' }]).total, 5.3, 'summe');
+  console.log('Kassenbon-Test OK');
+}
