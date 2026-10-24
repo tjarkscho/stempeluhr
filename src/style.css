@@ -344,3 +344,9 @@ header .icon svg { display: block; }
 .heat-legend { display: flex; align-items: center; gap: 8px; margin: 12px 2px 0; font-size: 12px; color: var(--muted); }
 .heat-legend i { flex: 1; height: 8px; border-radius: 4px;
   background: linear-gradient(90deg, hsl(38 var(--heat-s) var(--heat-l)), hsl(140 var(--heat-s) var(--heat-l)) 66%, hsl(0 var(--heat-s) var(--heat-l))); }
+
+/* ---------------- Face-ID-Sperre ---------------- */
+.bio-btn { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.lock .login { justify-items: center; }
+.lock .login .bio-btn { width: 100%; }
+.lock .link { margin-top: 2px; }

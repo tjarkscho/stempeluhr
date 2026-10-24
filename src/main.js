@@ -24,6 +24,8 @@ if (!URL_ || !KEY) {
 const sb = createClient(URL_, KEY);
 
 const S = {
+  locked: (() => { try { return !!JSON.parse(localStorage.getItem('stempeluhr.lock') || 'null')?.id; } catch { return false; } })(),
+  bioAvail: false,
   user: null,
   entries: [],
   byDay: new Map(),
@@ -55,6 +57,7 @@ const ICON = {
   download: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   warn: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>',
   cloud: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5H7z"/><path d="M4 4l16 16"/></svg>',
+  face: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 9.5v1M15 9.5v1M12 9.5v3.5h-1M9.5 16c1.4 1 3.6 1 5 0"/></svg>',
   eye: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   out: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 16l-4-4 4-4M5 12h10"/></svg>',
 };
@@ -748,7 +751,11 @@ function prefsControls() {
     ${S.user ? `<span class="plabel">${L.reminder}</span>
     <button type="button" class="toggle ${S.pushOn ? 'on' : ''}" data-act="push" ${S.busy ? 'disabled' : ''}>
       <span>${L.reminderText}</span><i></i></button>
-    ${S.pushHint ? `<p class="hint">${esc(S.pushHint)}</p>` : ''}` : ''}
+    ${S.pushHint ? `<p class="hint">${esc(S.pushHint)}</p>` : ''}
+    ${S.bioAvail ? `<span class="plabel">${L.bioTitle}</span>
+    <button type="button" class="toggle ${lockId() ? 'on' : ''}" data-act="bio" ${S.busy ? 'disabled' : ''}>
+      <span>${L.bioText}</span><i></i></button>
+    ${S.bioHint ? `<p class="hint">${esc(S.bioHint)}</p>` : ''}` : ''}` : ''}
   </div>`;
 }
 
@@ -860,6 +867,7 @@ function render() {
     app.innerHTML = viewLogin() + (S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : '');
     return;
   }
+  if (S.locked && lockId()) { app.innerHTML = viewLock(); return; }
   const L = T();
   const tab = (v, l) => `<button class="${S.view === v ? 'on' : ''}" data-act="view" data-v="${v}">${l}</button>`;
   // Fokus/Scroll im Editor erhalten
@@ -938,13 +946,15 @@ app.addEventListener('click', async (e) => {
   else if (a === 'setclose') { S.settings = false; render(); }
   else if (a === 'pweye') { const i = el.parentElement.querySelector('input'); i.type = i.type === 'password' ? 'text' : 'password'; el.classList.toggle('on'); }
   else if (a === 'push') togglePush();
+  else if (a === 'bio') toggleBio();
+  else if (a === 'unlock') unlock();
   else if (a === 'pref') { setPref(el.dataset.k, el.dataset.v); render(); }
-  else if (a === 'logout') { await sb.auth.signOut(); }
+  else if (a === 'logout') { S.locked = false; await sb.auth.signOut(); }
 });
 
 // Uhr aktualisieren
 // Login-Zifferblatt jede Minute nachführen (ohne die Eingaben zu verlieren)
-setInterval(() => { if (!S.user) tickDial(); }, 1000);
+setInterval(() => { if (!S.user || S.locked) tickDial(); }, 1000);
 setInterval(() => { if (S.user && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !slide) render(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && S.user) countUpNext = true;
@@ -990,6 +1000,70 @@ async function togglePush() {
   S.busy = false; render();
 }
 
+// ---------------- Face ID (App-Sperre über WebAuthn, nur auf diesem Gerät) ----------------
+const LKEY = 'stempeluhr.lock';
+function lockId() { try { return JSON.parse(localStorage.getItem(LKEY) || 'null')?.id || null; } catch { return null; } }
+const u8 = (n) => crypto.getRandomValues(new Uint8Array(n));
+const toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+try {
+  window.PublicKeyCredential?.isUserVerifyingPlatformAuthenticatorAvailable?.().then((ok) => { S.bioAvail = !!ok; }).catch(() => {});
+} catch { /* egal */ }
+
+async function toggleBio() {
+  const L = T();
+  S.bioHint = null;
+  if (lockId()) { try { localStorage.removeItem(LKEY); } catch { /* egal */ } return render(); }
+  try {
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: u8(32),
+      rp: { name: 'Stempeluhr', id: location.hostname },
+      user: { id: u8(16), name: S.user.email || 'stempeluhr', displayName: CONFIG.employee },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+      timeout: 60000, attestation: 'none',
+    } });
+    localStorage.setItem(LKEY, JSON.stringify({ id: toB64(cred.rawId) }));
+    toast(L.bioOn);
+  } catch (e) { if (e.name !== 'NotAllowedError') S.bioHint = e.message; }
+  render();
+}
+
+let unlocking = false;
+async function unlock() {
+  const id = lockId();
+  if (!id) { S.locked = false; return render(); }
+  if (unlocking) return;
+  unlocking = true;
+  try {
+    await navigator.credentials.get({ publicKey: {
+      challenge: u8(32), rpId: location.hostname, timeout: 60000, userVerification: 'required',
+      allowCredentials: [{ type: 'public-key', id: b64ToU8(id) }],
+    } });
+    S.locked = false; countUpNext = true; render();
+  } catch { /* abgebrochen: Sperrbildschirm bleibt */ }
+  unlocking = false;
+}
+
+function viewLock() {
+  const L = T();
+  return `<div class="login-wrap lock">
+    <img class="login-logo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" />
+    ${loginDial()}
+    <div class="login">
+      <h1>${L.greet(+hhmm(new Date()).slice(0, 2))}, ${esc(CONFIG.employee.split(' ')[0])}</h1>
+      <button class="btn login-btn bio-btn" data-act="unlock">${ICON.face}<span>${L.bioUnlock}</span></button>
+      <button class="link" data-act="logout">${L.bioPassword}</button>
+    </div>
+  </div>`;
+}
+
+// nach mehr als 5 Minuten im Hintergrund wieder sperren
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (S.user && lockId() && hiddenAt && Date.now() - hiddenAt > 5 * 60000) { S.locked = true; render(); unlock(); }
+});
+
 function hideSplash() {
   const sp = document.getElementById('splash');
   if (!sp || sp.dataset.out) return;
@@ -1002,7 +1076,8 @@ function hideSplash() {
 sb.auth.onAuthStateChange((_ev, session) => {
   const was = S.user?.id;
   S.user = session?.user || null;
-  if (S.user && S.user.id !== was) loadAll();
+  if (!S.user) S.locked = false;
+  if (S.user && S.user.id !== was) { loadAll(); if (S.locked) unlock(); }
   else render();
   hideSplash();
 });
