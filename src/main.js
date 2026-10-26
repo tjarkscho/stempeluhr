@@ -136,7 +136,16 @@ async function loadReports() {
   if (error) throw error;
   S.reports = data;
 }
+// PDF-Sprache = App-Sprache; auch für die automatischen Blätter (Server liest sie aus dem Benutzerprofil)
+const pdfLang = () => ({ lang: prefs.lang });
+function syncLang() {
+  if (S.user && S.user.user_metadata?.lang !== prefs.lang) {
+    sb.auth.updateUser({ data: { lang: prefs.lang } }).then(({ data }) => { if (data?.user) S.user = data.user; }).catch(() => {});
+  }
+}
+
 async function loadAll() {
+  syncLang();
   loadCache();
   const hadCache = S.entries.length > 0;
   countUpNext = hadCache;                     // mit Cache sofort hochzählen, sonst nach dem Laden
@@ -505,7 +514,7 @@ async function periodPdf(key) {
     let bytes, name;
     if (key.length === 7) {
       const st = rangeStats(`${key}-01`, lastOfMonth(key), S.byDay, S.absences, now);
-      bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), S.byDay, S.absences, now), logo);
+      bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), S.byDay, S.absences, now), logo, pdfLang());
       name = `Arbeitszeit_${key}.pdf`;
     } else {
       const months = [];
@@ -513,7 +522,7 @@ async function periodPdf(key) {
         const ym = `${key}-${String(m).padStart(2, '0')}`;
         months.push({ ym, st: rangeStats(`${ym}-01`, lastOfMonth(ym), S.byDay, S.absences, now), saldo: saldoAt(lastOfMonth(ym), S.byDay, S.absences, now) });
       }
-      bytes = await buildYearPdf(+key, months, rangeStats(`${key}-01-01`, `${key}-12-31`, S.byDay, S.absences, now), saldoAt(`${key}-12-31`, S.byDay, S.absences, now), logo);
+      bytes = await buildYearPdf(+key, months, rangeStats(`${key}-01-01`, `${key}-12-31`, S.byDay, S.absences, now), saldoAt(`${key}-12-31`, S.byDay, S.absences, now), logo, pdfLang());
       name = `Arbeitszeit_${key}.pdf`;
     }
     S.busy = false; render();
@@ -551,9 +560,9 @@ async function draftPdf() {
     const now = new Date(), today = dayKey(now), m = mondayOf(today);
     const w = weekStats(m, S.byDay, S.absences, now, today);
     const saldo = saldoThrough(m, S.byDay, S.absences, now);
-    const stamp = `Stand ${fmtDate(today)}, ${hhmm(now)}`;
+    const stamp = `${T().pdfStand} ${fmtDate(today)}, ${hhmm(now)}`;
     const { buildWeekPdf } = await import('./lib/pdf.js');
-    const bytes = await buildWeekPdf(w, saldo, await getLogo(), { draft: true, today, stamp });
+    const bytes = await buildWeekPdf(w, saldo, await getLogo(), { draft: true, today, stamp, ...pdfLang() });
     S.busy = false; render();
     await saveFile(bytes, `Arbeitszeitnachweis_${w.year}-KW${String(w.week).padStart(2, '0')}_Zwischenstand_${today.slice(8)}-${today.slice(5, 7)}.pdf`);
   } catch (e) { S.busy = false; render(); toast(T().pdfError + e.message, true); }
@@ -566,7 +575,7 @@ async function generatePdf(monday) {
     const w = weekStats(monday, S.byDay, S.absences, now);
     const saldo = saldoThrough(monday, S.byDay, S.absences, now);
     const { buildWeekPdf } = await import('./lib/pdf.js');
-    const bytes = await buildWeekPdf(w, saldo, await getLogo());
+    const bytes = await buildWeekPdf(w, saldo, await getLogo(), pdfLang());
     const path = `${S.user.id}/${w.year}-KW${String(w.week).padStart(2, '0')}.pdf`;
     const up = await sb.storage.from('reports').upload(path, new Blob([bytes], { type: 'application/pdf' }), { upsert: true, contentType: 'application/pdf' });
     if (up.error) throw up.error;
@@ -1056,7 +1065,7 @@ async function refreshSheets(days) {
         continue;
       }
       const { buildExpensePdf } = await import('./lib/pdf-expense.js');
-      const bytes = await buildExpensePdf(ym, items, new Map(), await getLogo());
+      const bytes = await buildExpensePdf(ym, items, new Map(), await getLogo(), pdfLang());
       const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
       if (up.error) throw up.error;
       const { error } = await sb.from('expense_reports').upsert({
@@ -1076,7 +1085,7 @@ async function receiptsPdf() {
   try {
     const ym = S.expMonth, items = monthItems(ym);
     const { buildExpensePdf } = await import('./lib/pdf-expense.js');
-    const bytes = await buildExpensePdf(ym, items, await loadPhotos(items), null, { receiptsOnly: true });
+    const bytes = await buildExpensePdf(ym, items, await loadPhotos(items), null, { receiptsOnly: true, ...pdfLang() });
     S.busy = false; render();
     await saveFile(bytes, `Belege_${ym}.pdf`);
   } catch (e) { S.busy = false; render(); toast(T().error + (e.message || e), true); }
@@ -1103,7 +1112,7 @@ async function expenseDraftPdf() {
     const { buildExpensePdf } = await import('./lib/pdf-expense.js');
     const now = new Date();
     const bytes = await buildExpensePdf(ym, items, photos, await getLogo(),
-      { draft: true, stamp: `Stand ${fmtDate(dayKey(now))} ${hhmm(now)}` });
+      { draft: true, stamp: `${T().pdfStand} ${fmtDate(dayKey(now))} ${hhmm(now)}`, ...pdfLang() });
     S.busy = false; render();
     await saveFile(bytes, `Spesen_${ym}_Zwischenstand.pdf`);
   } catch (e) { S.busy = false; render(); toast(T().error + (e.message || e), true); }
@@ -1330,7 +1339,7 @@ app.addEventListener('click', async (e) => {
   else if (a === 'push') togglePush();
   else if (a === 'bio') toggleBio();
   else if (a === 'unlock') unlock();
-  else if (a === 'pref') { setPref(el.dataset.k, el.dataset.v); render(); }
+  else if (a === 'pref') { setPref(el.dataset.k, el.dataset.v); if (el.dataset.k === 'lang') syncLang(); render(); }
   else if (a === 'logout') { S.locked = false; await sb.auth.signOut(); }
 });
 
