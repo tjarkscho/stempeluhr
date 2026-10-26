@@ -482,8 +482,8 @@ function viewPeriods(L) {
   <p class="hint">${L.periodHint}</p>`;
 }
 
-async function saveFile(bytes, name) {
-  const file = new File([bytes], name, { type: 'application/pdf' });
+async function saveFile(bytes, name, type = 'application/pdf') {
+  const file = new File([bytes], name, { type });
   try {
     // Teilen-Dialog nur am Handy (dort klappt "Sichern in Dateien" am besten); am PC direkt herunterladen
     const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
@@ -829,7 +829,8 @@ function viewExpenses() {
       <div><b>${esc((x.category === 'km' ? cleanRoute(x.route) : '') || x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${x.category === 'km' ? `${String(Number(x.km)).replace('.', ',')} km` : L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
       <div class="r"><b>${fmtChf(x.amount)}</b></div>
     </li>`).join('')}</ul></section>` : `<p class="hint center-t">${L.expEmpty}</p>`}
-  ${items.length ? `<button class="btn ghost" data-act="expdraft" ${S.busy ? 'disabled' : ''}>${L.expDraft}</button>` : ''}
+  ${items.length ? `<div class="exp-btns"><button class="btn ghost" data-act="expdraft" ${S.busy ? 'disabled' : ''}>${L.expDraft}</button>
+    ${items.some((x) => x.photo_path) ? `<button class="btn ghost" data-act="expphotos" ${S.busy ? 'disabled' : ''}>${ICON.image}<span>${L.expPhotos}</span></button>` : ''}</div>` : ''}
   ${S.expReports.length ? `<h3 class="exp-h">${L.expSheets}</h3><section class="card pad0"><ul class="list">${S.expReports.map((r) => `
     <li data-act="dl" data-path="${esc(r.pdf_path)}" data-name="Spesen_${r.month}.pdf">
       <div><b>${monthLabel(r.month)}</b><small>${L.expCount(r.count)}</small></div>
@@ -879,6 +880,7 @@ function viewExpSheet() {
   return `<div class="modal"><div class="sheet exp-sheet">
     <div class="sheethead"><b>${x.id ? L.expEdit : L.expNew}</b><button class="icon" data-act="expclose">${ICON.close}</button></div>
     ${x.url ? `<img class="exp-photo" src="${esc(x.url)}" alt="" />` : ''}
+    ${x.id && x.photo_path ? `<button class="link exp-dl" data-act="expphoto">${ICON.download}<span>${L.expPhotoDl}</span></button>` : ''}
     ${status ? `<p class="exp-ocr ${x.ocr}">${x.ocr === 'run' ? '<i class="spin"></i>' : ''}<span>${status}</span></p>` : ''}
     <div class="exp-grid">
       <label class="fld"><span>${L.expAmount}</span><input data-exp="amount" inputmode="decimal" enterkeyhint="done" value="${esc(x.amount ?? '')}" placeholder="0.00" /></label>
@@ -1054,7 +1056,7 @@ async function refreshSheets(days) {
         continue;
       }
       const { buildExpensePdf } = await import('./lib/pdf-expense.js');
-      const bytes = await buildExpensePdf(ym, items, await loadPhotos(items), await getLogo());
+      const bytes = await buildExpensePdf(ym, items, new Map(), await getLogo());
       const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
       if (up.error) throw up.error;
       const { error } = await sb.from('expense_reports').upsert({
@@ -1067,13 +1069,37 @@ async function refreshSheets(days) {
   await loadExpenses().catch(() => {});
 }
 
+// Belegfotos eines Monats als eigenes PDF (Nummern wie im Spesenblatt)
+async function receiptsPdf() {
+  if (S.busy) return;
+  S.busy = true; render();
+  try {
+    const ym = S.expMonth, items = monthItems(ym);
+    const { buildExpensePdf } = await import('./lib/pdf-expense.js');
+    const bytes = await buildExpensePdf(ym, items, await loadPhotos(items), null, { receiptsOnly: true });
+    S.busy = false; render();
+    await saveFile(bytes, `Belege_${ym}.pdf`);
+  } catch (e) { S.busy = false; render(); toast(T().error + (e.message || e), true); }
+}
+
+// einzelnes Belegfoto herunterladen
+async function photoDownload() {
+  const x = S.exp;
+  if (!x?.photo_path || S.busy) return;
+  try {
+    const { data, error } = await sb.storage.from('receipts').download(x.photo_path);
+    if (error) throw error;
+    await saveFile(new Uint8Array(await data.arrayBuffer()), `Beleg_${x.day}.jpg`, 'image/jpeg');
+  } catch (e) { toast(T().error + (e.message || e), true); }
+}
+
 async function expenseDraftPdf() {
   if (S.busy) return;
   S.busy = true; render();
   try {
     const ym = S.expMonth;
     const items = monthItems(ym);
-    const photos = await loadPhotos(items);
+    const photos = new Map();
     const { buildExpensePdf } = await import('./lib/pdf-expense.js');
     const now = new Date();
     const bytes = await buildExpensePdf(ym, items, photos, await getLogo(),
@@ -1291,6 +1317,8 @@ app.addEventListener('click', async (e) => {
   else if (a === 'expsave') saveExpense();
   else if (a === 'expdel') deleteExpense(el);
   else if (a === 'expdraft') expenseDraftPdf();
+  else if (a === 'expphotos') receiptsPdf();
+  else if (a === 'expphoto') photoDownload();
   else if (a === 'expkm') { S.exp = { kind: 'km', day: dayKey(new Date()), km: '', ret: false, route: '', note: '', touched: {} }; enterAnim = 'sheet'; render(); app.querySelector('[data-exp=route]')?.focus(); }
   else if (a === 'expret') { S.exp.ret = !S.exp.ret; el.classList.toggle('on', S.exp.ret); refreshKm(); }
   else if (a === 'arch') { S.archTab = el.dataset.v; render(); }
