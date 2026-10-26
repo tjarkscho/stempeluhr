@@ -153,7 +153,10 @@ async function loadReports() {
 const pdfLang = () => ({ lang: prefs.lang });
 function syncLang() {
   if (S.user && S.user.user_metadata?.lang !== prefs.lang) {
+    const changed = !!S.user.user_metadata?.lang;
     sb.auth.updateUser({ data: { lang: prefs.lang } }).then(({ data }) => { if (data?.user) S.user = data.user; }).catch(() => {});
+    // gespeicherte Spesenblätter in der neuen Sprache ablegen (für Archiv/automatische Läufe)
+    if (changed && S.expReports.length) refreshSheets(S.expReports.map((r) => `${r.month}-01`));
   }
 }
 
@@ -399,7 +402,7 @@ function viewWeek() {
   <p class="hint">${L.weekHint}</p>
   ${done && addDays(m, 6) >= CONFIG.startDate ? `<button class="btn" data-act="genpdf" ${S.busy ? 'disabled' : ''}>${rep ? L.pdfRemake : L.pdfMake}</button>` : ''}
   ${isCurrent ? `<button class="btn ghost" data-act="draftpdf" ${S.busy ? 'disabled' : ''}>${L.pdfDraft}</button><p class="hint">${L.pdfDraftHint}</p>` : ''}
-  ${rep ? `<button class="btn ghost" data-act="dl" data-path="${esc(rep.pdf_path)}">${L.pdfDownload}</button>` : ''}`;
+  ${rep ? `<button class="btn ghost" data-act="sheet" data-kind="week" data-key="${m}">${L.pdfDownload}</button>` : ''}`;
 }
 
 // ---------------- Archiv ----------------
@@ -410,7 +413,7 @@ function viewArchive() {
   if (S.archTab === 'months' || S.archTab === 'years') return tabs + viewPeriods(L);
   if (!S.reports.length) return tabs + `<section class="card"><p>${L.archiveEmpty}</p></section>`;
   return tabs + `<section class="card pad0"><ul class="list">${S.reports.map((r) => `
-    <li data-act="dl" data-path="${esc(r.pdf_path)}">
+    <li data-act="sheet" data-kind="week" data-key="${r.week_start}">
       <div><b>${L.week} ${r.week} / ${r.year}</b><small>${fmtDate(r.week_start)} – ${fmtDate(addDays(r.week_start, 6))}</small></div>
       <div class="r"><span class="${r.diff < 0 ? 'neg' : 'pos'}">${fmtMin(r.diff, true)}</span><small>${L.balance} ${fmtMin(r.saldo, true)}</small></div>
       <span class="dl">${ICON.download}</span>
@@ -528,7 +531,7 @@ async function periodPdf(key) {
     if (key.length === 7) {
       const st = rangeStats(`${key}-01`, lastOfMonth(key), S.byDay, S.absences, now);
       bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), S.byDay, S.absences, now), logo, pdfLang());
-      name = `Arbeitszeit_${key}.pdf`;
+      name = `${T().fileMonth}_${key}.pdf`;
     } else {
       const months = [];
       for (let m = 1; m <= 12; m++) {
@@ -536,11 +539,33 @@ async function periodPdf(key) {
         months.push({ ym, st: rangeStats(`${ym}-01`, lastOfMonth(ym), S.byDay, S.absences, now), saldo: saldoAt(lastOfMonth(ym), S.byDay, S.absences, now) });
       }
       bytes = await buildYearPdf(+key, months, rangeStats(`${key}-01-01`, `${key}-12-31`, S.byDay, S.absences, now), saldoAt(`${key}-12-31`, S.byDay, S.absences, now), logo, pdfLang());
-      name = `Arbeitszeit_${key}.pdf`;
+      name = `${T().fileYear}_${key}.pdf`;
     }
     S.busy = false; render();
     await saveFile(bytes, name);
   } catch (e) { S.busy = false; toast(T().pdfError + e.message, true); }
+}
+
+// Gespeicherte Blätter immer frisch aus den Daten erstellen – so stimmen Sprache, Layout und Korrekturen immer
+async function sheetPdf(kind, key) {
+  if (S.busy) return;
+  S.busy = true; render();
+  try {
+    const L = T(), now = new Date(), logo = await getLogo();
+    let bytes, name;
+    if (kind === 'week') {
+      const w = weekStats(key, S.byDay, S.absences, now);
+      const { buildWeekPdf } = await import('./lib/pdf.js');
+      bytes = await buildWeekPdf(w, saldoThrough(key, S.byDay, S.absences, now), logo, pdfLang());
+      name = `${L.fileWeek}_${w.year}-${L.fileKw}${String(w.week).padStart(2, '0')}.pdf`;
+    } else {
+      const { buildExpensePdf } = await import('./lib/pdf-expense.js');
+      bytes = await buildExpensePdf(key, monthItems(key), new Map(), logo, pdfLang());
+      name = `${L.fileExp}_${key}.pdf`;
+    }
+    S.busy = false; render();
+    await saveFile(bytes, name);
+  } catch (e) { S.busy = false; render(); toast(T().pdfError + (e.message || e), true); }
 }
 
 async function download(path, name) {
@@ -580,7 +605,7 @@ async function draftPdf() {
     const { buildWeekPdf } = await import('./lib/pdf.js');
     const bytes = await buildWeekPdf(w, saldo, await getLogo(), { draft: true, today, stamp, ...pdfLang() });
     S.busy = false; render();
-    await saveFile(bytes, `Arbeitszeitnachweis_${w.year}-KW${String(w.week).padStart(2, '0')}_Zwischenstand_${today.slice(8)}-${today.slice(5, 7)}.pdf`);
+    await saveFile(bytes, `${T().fileWeek}_${w.year}-${T().fileKw}${String(w.week).padStart(2, '0')}_${T().fileDraft}_${today.slice(8)}-${today.slice(5, 7)}.pdf`);
   } catch (e) { S.busy = false; render(); toast(T().pdfError + e.message, true); }
 }
 
@@ -762,7 +787,7 @@ function viewLogin() {
     <img class="login-logo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" />
     ${loginDial()}
     <form class="login" id="login" novalidate>
-      <h1>Stempeluhr</h1>
+      <h1>${L.appName}</h1>
       <label class="fld"><span>${L.email}</span><input type="email" name="email" autocomplete="username" inputmode="email" required /></label>
       <label class="fld"><span>${L.password}</span><span class="pw"><input type="password" name="pw" autocomplete="current-password" required />
         <button type="button" class="pw-eye" data-act="pweye" aria-label="${L.showPw}">${ICON.eye}</button></span></label>
@@ -838,6 +863,8 @@ async function fixStaleSheets() {
   try { await refreshSheets(stale.map((ym) => `${ym}-01`)); } finally { fixingSheets = false; }
 }
 
+// Rück-Zusatz der Strecke in der App-Sprache anzeigen
+const routeLabel = (r) => cleanRoute(r).replace(/\s*(und zurück|aller-retour)$/i, () => ` ${T().expRetSuffix}`);
 const monthLabel = (ym) => `${T().months[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}`;
 
 function viewExpenses() {
@@ -871,13 +898,13 @@ function viewExpenses() {
   ${items.length ? `<section class="card pad0"><ul class="list exp-list">${items.map((x) => `
     <li data-act="expopen" data-id="${x.id}">
       <span class="thumb ${x.category === 'km' ? 'cat-km' : ''}">${x.category === 'km' ? ICON.car : x.photo_path && S.thumbs[x.photo_path] ? `<img src="${esc(S.thumbs[x.photo_path])}" alt="" loading="lazy" />` : ICON.camera}</span>
-      <div><b>${esc((x.category === 'km' ? cleanRoute(x.route) : '') || x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${x.category === 'km' ? `${String(Number(x.km)).replace('.', ',')} km` : L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
+      <div><b>${esc((x.category === 'km' ? routeLabel(x.route) : '') || x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${x.category === 'km' ? `${String(Number(x.km)).replace('.', ',')} km` : L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
       <div class="r"><b>${fmtChf(x.amount)}</b></div>
     </li>`).join('')}</ul></section>` : `<p class="hint center-t">${L.expEmpty}</p>`}
   ${items.length ? `<div class="exp-btns"><button class="btn ghost" data-act="expdraft" ${S.busy ? 'disabled' : ''}>${L.expDraft}</button>
     ${items.some((x) => x.photo_path) ? `<button class="btn ghost" data-act="expphotos" ${S.busy ? 'disabled' : ''}>${ICON.image}<span>${L.expPhotos}</span></button>` : ''}</div>` : ''}
   ${S.expReports.length ? `<h3 class="exp-h">${L.expSheets}</h3><section class="card pad0"><ul class="list">${S.expReports.map((r) => `
-    <li data-act="dl" data-path="${esc(r.pdf_path)}" data-name="Spesen_${r.month}.pdf">
+    <li data-act="sheet" data-kind="exp" data-key="${r.month}">
       <div><b>${monthLabel(r.month)}</b><small>${L.expCount(r.count)}</small></div>
       <div class="r"><b>CHF ${fmtChf(r.total)}</b></div><span class="dl">${ICON.download}</span>
     </li>`).join('')}</ul></section>` : ''}`;
@@ -1123,7 +1150,7 @@ async function receiptsPdf() {
     const { buildExpensePdf } = await import('./lib/pdf-expense.js');
     const bytes = await buildExpensePdf(ym, items, await loadPhotos(items), null, { receiptsOnly: true, ...pdfLang() });
     S.busy = false; render();
-    await saveFile(bytes, `Belege_${ym}.pdf`);
+    await saveFile(bytes, `${T().fileReceipts}_${ym}.pdf`);
   } catch (e) { S.busy = false; render(); toast(T().error + (e.message || e), true); }
 }
 
@@ -1134,7 +1161,7 @@ async function photoDownload() {
   try {
     const { data, error } = await sb.storage.from('receipts').download(x.photo_path);
     if (error) throw error;
-    await saveFile(new Uint8Array(await data.arrayBuffer()), `Beleg_${x.day}.jpg`, 'image/jpeg');
+    await saveFile(new Uint8Array(await data.arrayBuffer()), `${T().fileReceipt}_${x.day}.jpg`, 'image/jpeg');
   } catch (e) { toast(T().error + (e.message || e), true); }
 }
 
@@ -1150,7 +1177,7 @@ async function expenseDraftPdf() {
     const bytes = await buildExpensePdf(ym, items, photos, await getLogo(),
       { draft: true, stamp: `${T().pdfStand} ${fmtDate(dayKey(now))} ${hhmm(now)}`, ...pdfLang() });
     S.busy = false; render();
-    await saveFile(bytes, `Spesen_${ym}_Zwischenstand.pdf`);
+    await saveFile(bytes, `${T().fileExp}_${ym}_${T().fileDraft}.pdf`);
   } catch (e) { S.busy = false; render(); toast(T().error + (e.message || e), true); }
 }
 
@@ -1352,6 +1379,7 @@ app.addEventListener('click', async (e) => {
   else if (a === 'genpdf') generatePdf(S.weekMonday);
   else if (a === 'draftpdf') draftPdf();
   else if (a === 'dl') download(el.dataset.path, el.dataset.name);
+  else if (a === 'sheet') sheetPdf(el.dataset.kind, el.dataset.key);
   else if (a === 'expprev' || a === 'expnext') {
     const [y, m] = S.expMonth.split('-').map(Number), d = new Date(Date.UTC(y, m - 1 + (a === 'expnext' ? 1 : -1), 1));
     S.expMonth = d.toISOString().slice(0, 7); render();
