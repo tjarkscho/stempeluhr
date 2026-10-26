@@ -97,7 +97,12 @@ export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
     if (has) {
       text(hhmm(d.in) + star(d.manualIn), X.in, y + 8, { align: 'right' });
       text(d.out ? hhmm(d.out) + star(d.manualOut) : '–', X.out, y + 8, { align: 'right' });
-      text(fmtMin(d.pause) + star(d.manualPause) + (d.autoPause ? (anyAuto = true, '†') : ''), X.pause, y + 8, { align: 'right', color: C.muted });
+      const pz = fmtMin(d.pause) + star(d.manualPause);
+      if (d.autoPause) {   // hochgestellte 1 = Fussnote "Pause auf gesetzliches Minimum erhöht"
+        anyAuto = true;
+        text(pz, X.pause - 5, y + 8, { align: 'right', color: C.muted });
+        text('1', X.pause - 4, y + 12, { size: 6, color: C.muted });
+      } else text(pz, X.pause, y + 8, { align: 'right', color: C.muted });
     }
     const future = opts.draft && opts.today && d.day > opts.today;
     const tot = future ? '' : d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '');
@@ -130,7 +135,11 @@ export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
   if (anyManual) notes.push(t.manual);
   if (anyAuto) notes.push(t.autoBreak);
   notes.push(t.weekRules);
-  for (const n of notes) { text(n, M, y, { size: 7.5, color: C.muted }); y -= 12; }
+  for (const n of notes) {
+    if (n.startsWith('¹ ')) { text('1', M, y + 3, { size: 5.5, color: C.muted }); text(n.slice(2), M + 5, y, { size: 7.5, color: C.muted }); }
+    else text(n, M, y, { size: 7.5, color: C.muted });
+    y -= 12;
+  }
 
   // ---- Fusszeile ----
   hline(M - 6, 0.4);
