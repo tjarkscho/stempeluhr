@@ -2,7 +2,11 @@ name: Wochen-PDF
 
 on:
   schedule:
-    - cron: '12 1 * * 1'   # Montag 01:12 UTC (02:12/03:12 Zürich)
+    # GitHub verschiebt/überspringt geplante Läufe manchmal – darum drei Versuche am Montag.
+    # Bereits erstellte Wochen werden übersprungen, es entstehen keine Doppel.
+    - cron: '12 1 * * 1'   # 02:12/03:12 Zürich
+    - cron: '37 4 * * 1'   # 05:37/06:37 Zürich
+    - cron: '23 9 * * 1'   # 10:23/11:23 Zürich
   workflow_dispatch:
     inputs:
       force:
