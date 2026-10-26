@@ -7,10 +7,10 @@ import { pdfText } from './pdf-i18n.js';
 
 const C = {
   text: rgb(0.11, 0.12, 0.14),
-  muted: rgb(0.48, 0.5, 0.54),
-  faint: rgb(0.72, 0.73, 0.76),
-  line: rgb(0.88, 0.89, 0.91),
-  band: rgb(0.965, 0.968, 0.975),
+  muted: rgb(0.27, 0.29, 0.32),   // dunkler, damit es gedruckt gut lesbar ist
+  faint: rgb(0.5, 0.52, 0.55),
+  line: rgb(0.7, 0.71, 0.74),
+  band: rgb(0.93, 0.935, 0.945),
   neg: rgb(0.68, 0.16, 0.13),
 };
 export const CAT_DE = { essen: 'Verpflegung', fahrt: 'Fahrt', material: 'Material', uebernachtung: 'Übernachtung', anderes: 'Anderes', km: 'Fahrt Privatauto' };
