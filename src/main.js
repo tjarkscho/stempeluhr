@@ -800,6 +800,24 @@ async function loadExpenses() {
     for (const d of data || []) if (d.signedUrl) S.thumbs[d.path] = d.signedUrl;
   }
   if (S.view === 'expenses' && !S.exp) render();
+  fixStaleSheets();
+}
+
+// Spesenblätter prüfen: stimmen Summe/Anzahl nicht (z. B. Änderung vor diesem Update), sofort neu erstellen
+let fixingSheets = false;
+async function fixStaleSheets() {
+  if (fixingSheets || !S.user) return;
+  const cur = dayKey(new Date()).slice(0, 7);
+  const months = new Set([...S.expenses.map((x) => x.day.slice(0, 7)), ...S.expReports.map((r) => r.month)]);
+  const stale = [...months].filter((ym) => {
+    const rep = S.expReports.find((r) => r.month === ym);
+    const items = S.expenses.filter((x) => x.day.startsWith(ym));
+    if (!rep) return ym < cur && items.length > 0;
+    return Math.abs(Number(rep.total) - expenseTotals(items).total) > 0.004 || rep.count !== items.length;
+  });
+  if (!stale.length) return;
+  fixingSheets = true;
+  try { await refreshSheets(stale.map((ym) => `${ym}-01`)); } finally { fixingSheets = false; }
 }
 
 const monthLabel = (ym) => `${T().months[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}`;
