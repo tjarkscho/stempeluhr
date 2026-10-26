@@ -2,6 +2,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { CONFIG } from '../config.js';
 import { hhmm, fmtDate, fmtMin, isoWeek, weekday } from './time.js';
+import { pdfText } from './pdf-i18n.js';
 
 const C = {
   text: rgb(0.11, 0.12, 0.14),
@@ -15,7 +16,7 @@ const C = {
 const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 export const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
-async function setup(title, logo) {
+async function setup(title, logo, t) {
   const doc = await PDFDocument.create();
   doc.setTitle(title);
   doc.setAuthor(CONFIG.employee);
@@ -33,11 +34,11 @@ async function setup(title, logo) {
   if (logo) {
     try { img = (logo[0] === 0x89 && logo[1] === 0x50) ? await doc.embedPng(logo) : await doc.embedJpg(logo); } catch { img = null; }
   }
-  return { doc, page, W, H, M, font, bold, text, hline, img };
+  return { doc, page, W, H, M, font, bold, text, hline, img, t };
 }
 
 function header(ctx, kicker, big, sub) {
-  const { page, W, H, M, bold, text, hline, img } = ctx;
+  const { page, W, H, M, bold, text, hline, img, t } = ctx;
   let y = H - M;
   if (img) {
     const s = Math.min(32 / img.height, 150 / img.width);
@@ -47,7 +48,7 @@ function header(ctx, kicker, big, sub) {
   text(big, W - M, y - 32, { f: bold, size: 20, align: 'right' });
   text(sub, W - M, y - 46, { size: 9, color: C.muted, align: 'right' });
   y -= 76;
-  const meta = [['Mitarbeiter', CONFIG.employee], ['Firma', CONFIG.company], ['Sollzeit', `${fmtMin(CONFIG.sollDayMin * 5)} h / Woche`]];
+  const meta = [[t.employee, CONFIG.employee], [t.company, CONFIG.company], [t.target, `${fmtMin(CONFIG.sollDayMin * 5)} ${t.perWeek}`]];
   const colW = (W - 2 * M) / 3;
   meta.forEach(([k, v], i) => {
     text(k.toUpperCase(), M + i * colW, y, { size: 7, color: C.muted, f: bold });
@@ -72,12 +73,12 @@ function band(ctx, y, cells) {
 }
 
 function footer(ctx, notes, yNotes) {
-  const { M, W, text, hline } = ctx;
+  const { M, W, text, hline, t } = ctx;
   let y = yNotes;
   for (const n of notes) { text(n, M, y, { size: 7.5, color: C.muted }); y -= 11; }
   hline(M - 6, 0.4);
   text(`${CONFIG.employee} · ${CONFIG.company}`, M, M - 19, { size: 7.5, color: C.faint });
-  text(`Erstellt am ${new Date().toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })}`, W - M, M - 19, { size: 7.5, color: C.faint, align: 'right' });
+  text(t.created(t.today()), W - M, M - 19, { size: 7.5, color: C.faint, align: 'right' });
 }
 
 const signed = (m) => (m < 0 ? C.neg : m > 0 ? C.pos : C.text);
@@ -88,17 +89,18 @@ const signed = (m) => (m < 0 ? C.neg : m > 0 ? C.pos : C.text);
  * @param st    rangeStats() des Monats
  * @param saldo Saldo total am Monatsende (bzw. heute)
  */
-export async function buildMonthPdf(ym, st, saldo, logo = null) {
+export async function buildMonthPdf(ym, st, saldo, logo = null, opts = {}) {
+  const t = pdfText(opts.lang);
   const [y0, m0] = ym.split('-').map(Number);
-  const name = `${MONTHS_DE[m0 - 1]} ${y0}`;
-  const ctx = await setup(`Arbeitszeit ${name}`, logo);
+  const name = `${t.months[m0 - 1]} ${y0}`;
+  const ctx = await setup(`${t.monthSheet} ${name}`, logo, t);
   const { M, W, bold, text, hline } = ctx;
-  let y = header(ctx, 'MONATSÜBERSICHT', name, `${fmtDate(st.from)} – ${fmtDate(st.to)}${st.partial ? ' · Stand heute' : ''}`);
+  let y = header(ctx, t.monthSheet.toUpperCase(), name, `${fmtDate(st.from)} – ${fmtDate(st.to)}${st.partial ? ` · ${t.asOfToday}` : ''}`);
 
   y -= 20;
   const X = { day: M, date: M + 24, kw: M + 92, in: M + 160, out: M + 205, pause: M + 252, total: M + 300, note: M + 318 };
-  for (const [h, x, a] of [['Tag', X.day], ['Datum', X.date], ['KW', X.kw], ['Ein', X.in, 'right'], ['Aus', X.out, 'right'],
-    ['Pause', X.pause, 'right'], ['Total', X.total, 'right'], ['Bemerkung', X.note]]) text(h.toUpperCase(), x, y, { size: 6.5, f: bold, color: C.muted, align: a });
+  for (const [h, x, a] of [[t.day, X.day], [t.date, X.date], [t.week, X.kw], [t.in, X.in, 'right'], [t.out, X.out, 'right'],
+    [t.pause, X.pause, 'right'], [t.total, X.total, 'right'], [t.note, X.note]]) text(h.toUpperCase(), x, y, { size: 6.5, f: bold, color: C.muted, align: a });
   y -= 7;
   hline(y, 0.8, C.faint);
 
@@ -112,7 +114,7 @@ export async function buildMonthPdf(ym, st, saldo, logo = null) {
     const has = !!d.in;
     const quiet = (wd >= 5 && !has) || !d.counted || (!d.done && !has);
     const col = quiet ? C.faint : C.text;
-    text(DAYS[wd], X.day, y + 5, { color: col });
+    text(t.daysShort[wd], X.day, y + 5, { color: col });
     text(fmtDate(d.day), X.date, y + 5, { color: quiet ? C.faint : C.muted });
     if (wd === 0) text(String(isoWeek(d.day).week), X.kw, y + 5, { color: C.muted, size: 8 });
     if (has) {
@@ -122,19 +124,19 @@ export async function buildMonthPdf(ym, st, saldo, logo = null) {
       text(fmtMin(d.pause), X.pause, y + 5, { align: 'right', color: C.muted });
     }
     if (d.counted && d.done && (d.dayTotal || d.soll)) text(fmtMin(d.dayTotal), X.total, y + 5, { align: 'right', f: bold, color: col });
-    const notes = [d.label, d.bonus ? `+${Math.round(d.rate * 100)} %` : null].filter(Boolean).join(' · ');
+    const notes = [t.label(d.label), d.bonus ? `+${Math.round(d.rate * 100)} %` : null].filter(Boolean).join(' · ');
     if (notes) text(notes, X.note, y + 5, { size: 8, color: C.muted });
     if (wd === 6) hline(y, 0.5, C.line);
   }
 
   y -= 24 + 54;
-  band(ctx, y, [['Soll', fmtMin(st.soll)], ['Ist', fmtMin(st.ist)], ['Differenz', fmtMin(st.diff, true), signed(st.diff)],
-    ['Saldo total', fmtMin(saldo, true), signed(saldo)]]);
+  band(ctx, y, [[t.soll, fmtMin(st.soll)], [t.ist, fmtMin(st.ist)], [t.diff, fmtMin(st.diff, true), signed(st.diff)],
+    [t.saldo, fmtMin(saldo, true), signed(saldo)]]);
   const notes = [];
-  if (manual) notes.push('* manuell korrigiert');
-  notes.push(`Ferien: ${st.vacation} Tag(e) · Krank: ${st.sick} Tag(e) · Zuschläge: ${fmtMin(st.bonus)}`);
-  notes.push('Pausen nach ArG Art. 15 · Zuschlag als Zeit: Sa +25 %, So/Feiertag +50 % · Überstunden Mo–Fr 1:1');
-  if (st.partial) notes.push('Laufender Monat: Werte bis und mit heute.');
+  if (manual) notes.push(t.manual);
+  notes.push(t.monthSums(st.vacation, st.sick, fmtMin(st.bonus)));
+  notes.push(t.monthRules);
+  if (st.partial) notes.push(t.monthPartial);
   footer(ctx, notes, y - 20);
   return ctx.doc.save();
 }
@@ -146,15 +148,16 @@ export async function buildMonthPdf(ym, st, saldo, logo = null) {
  * @param total  rangeStats() des ganzen Jahres
  * @param saldo  Saldo total am Jahresende (bzw. heute)
  */
-export async function buildYearPdf(year, months, total, saldo, logo = null) {
-  const ctx = await setup(`Arbeitszeit ${year}`, logo);
+export async function buildYearPdf(year, months, total, saldo, logo = null, opts = {}) {
+  const t = pdfText(opts.lang);
+  const ctx = await setup(`${t.yearSheet} ${year}`, logo, t);
   const { M, bold, text, hline } = ctx;
-  let y = header(ctx, 'JAHRESÜBERSICHT', String(year), `01.01.${year} – 31.12.${year}${total.partial ? ' · Stand heute' : ''}`);
+  let y = header(ctx, t.yearSheet.toUpperCase(), String(year), `01.01.${year} – 31.12.${year}${total.partial ? ` · ${t.asOfToday}` : ''}`);
 
   y -= 22;
   const X = { m: M, soll: M + 150, ist: M + 215, diff: M + 285, bonus: M + 350, vac: M + 405, sick: M + 450, saldo: M + 495 };
-  for (const [h, x, a] of [['Monat', X.m], ['Soll', X.soll, 'right'], ['Ist', X.ist, 'right'], ['Differenz', X.diff, 'right'],
-    ['Zuschlag', X.bonus, 'right'], ['Ferien', X.vac, 'right'], ['Krank', X.sick, 'right'], ['Saldo', X.saldo, 'right']])
+  for (const [h, x, a] of [[t.month, X.m], [t.soll, X.soll, 'right'], [t.ist, X.ist, 'right'], [t.diff, X.diff, 'right'],
+    [t.bonus, X.bonus, 'right'], [t.vacation, X.vac, 'right'], [t.sick, X.sick, 'right'], [t.saldoShort, X.saldo, 'right']])
     text(h.toUpperCase(), x, y, { size: 6.5, f: bold, color: C.muted, align: a });
   y -= 8;
   hline(y, 0.8, C.faint);
@@ -165,7 +168,7 @@ export async function buildYearPdf(year, months, total, saldo, logo = null) {
     const m = +ym.slice(5, 7);
     const empty = !st.soll && !st.ist;
     const col = empty ? C.faint : C.text;
-    text(MONTHS_DE[m - 1], X.m, y + 8, { color: col });
+    text(t.months[m - 1], X.m, y + 8, { color: col });
     if (!empty) {
       text(fmtMin(st.soll), X.soll, y + 8, { align: 'right', color: C.muted });
       text(fmtMin(st.ist), X.ist, y + 8, { align: 'right', f: bold });
@@ -179,12 +182,12 @@ export async function buildYearPdf(year, months, total, saldo, logo = null) {
   }
 
   y -= 30 + 54;
-  band(ctx, y, [['Soll', fmtMin(total.soll)], ['Ist', fmtMin(total.ist)], ['Differenz', fmtMin(total.diff, true), signed(total.diff)],
-    ['Saldo total', fmtMin(saldo, true), signed(saldo)]]);
+  band(ctx, y, [[t.soll, fmtMin(total.soll)], [t.ist, fmtMin(total.ist)], [t.diff, fmtMin(total.diff, true), signed(total.diff)],
+    [t.saldo, fmtMin(saldo, true), signed(saldo)]]);
   footer(ctx, [
-    `Ferien: ${total.vacation} Tag(e) · Krank: ${total.sick} Tag(e) · Zuschläge: ${fmtMin(total.bonus)}`,
-    'Saldo = Stand am Monatsende · Pausen nach ArG Art. 15 · Zuschlag als Zeit: Sa +25 %, So/Feiertag +50 % · Überstunden Mo–Fr 1:1',
-    ...(total.partial ? ['Laufendes Jahr: Werte bis und mit heute.'] : []),
+    t.monthSums(total.vacation, total.sick, fmtMin(total.bonus)),
+    t.yearRules,
+    ...(total.partial ? [t.yearPartial] : []),
   ], y - 20);
   return ctx.doc.save();
 }
