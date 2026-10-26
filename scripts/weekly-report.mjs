@@ -49,7 +49,7 @@ for (let m = mondayOf(CONFIG.startDate); m <= lastMonday; m = addDays(m, 7)) {
   if (existing.has(m) && !(FORCE && m === lastMonday)) continue;
   const w = weekStats(m, byDay, absences, now);
   const saldo = saldoThrough(m, byDay, absences, now);
-  const bytes = await buildWeekPdf(w, saldo, logo);
+  const bytes = await buildWeekPdf(w, saldo, logo, { lang: user.user_metadata?.lang });
   const path = `${user.id}/${w.year}-KW${String(w.week).padStart(2, '0')}.pdf`;
   const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
   if (up.error) throw up.error;
