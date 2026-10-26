@@ -7,7 +7,7 @@ import {
 } from './lib/time.js';
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
-import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, PHOTO_CATS, kmAmount, lastWorkday } from './lib/receipt.js';
+import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, PHOTO_CATS, kmAmount, lastWorkday, cleanRoute } from './lib/receipt.js';
 import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt, dayRecord, lawBreak } from './lib/calc.js';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL;
@@ -826,7 +826,7 @@ function viewExpenses() {
   ${items.length ? `<section class="card pad0"><ul class="list exp-list">${items.map((x) => `
     <li data-act="expopen" data-id="${x.id}">
       <span class="thumb ${x.category === 'km' ? 'cat-km' : ''}">${x.category === 'km' ? ICON.car : x.photo_path && S.thumbs[x.photo_path] ? `<img src="${esc(S.thumbs[x.photo_path])}" alt="" loading="lazy" />` : ICON.camera}</span>
-      <div><b>${esc((x.category === 'km' ? x.route : '') || x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${x.category === 'km' ? `${String(Number(x.km)).replace('.', ',')} km` : L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
+      <div><b>${esc((x.category === 'km' ? cleanRoute(x.route) : '') || x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${x.category === 'km' ? `${String(Number(x.km)).replace('.', ',')} km` : L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
       <div class="r"><b>${fmtChf(x.amount)}</b></div>
     </li>`).join('')}</ul></section>` : `<p class="hint center-t">${L.expEmpty}</p>`}
   ${items.length ? `<button class="btn ghost" data-act="expdraft" ${S.busy ? 'disabled' : ''}>${L.expDraft}</button>` : ''}
@@ -945,7 +945,8 @@ function openExpense(id) {
   const x = S.expenses.find((e) => e.id === id);
   if (!x) return;
   if (x.category === 'km') {
-    S.exp = { kind: 'km', id, day: x.day, km: String(Number(x.km)), ret: false, route: x.route, note: x.note, touched: {} };
+    const r = cleanRoute(x.route), ret = /\s(und zurück|aller-retour)$/i.test(r);
+    S.exp = { kind: 'km', id, day: x.day, km: String(ret ? Number(x.km) / 2 : Number(x.km)), ret, route: r.replace(/\s*(und zurück|aller-retour)$/i, ''), note: x.note, touched: {} };
     enterAnim = 'sheet'; return render();
   }
   S.exp = { id, day: x.day, amount: Number(x.amount).toFixed(2), category: x.category, note: x.note, url: x.photo_path ? S.thumbs[x.photo_path] : null, photo_path: x.photo_path, touched: {} };
@@ -988,7 +989,8 @@ async function saveKm() {
   const { km, amount } = kmTotal();
   if (!(km > 0)) { toast(L.expNeedKm, true); app.querySelector('[data-exp=km]')?.focus(); return; }
   if (!x.day) { toast(L.expNeedDate, true); return; }
-  const route = (x.route || '').trim() + (x.ret ? ` ${L.expRetSuffix}` : '');
+  const base = cleanRoute(x.route).replace(/\s*(und zurück|aller-retour)$/i, '');
+  const route = base + (x.ret ? ` ${L.expRetSuffix}` : '');
   S.busy = true; render();
   try {
     const row = { day: x.day, amount, category: 'km', km, route, note: (x.note || '').trim() };
