@@ -547,9 +547,12 @@ async function download(path, name) {
   if (S.busy) return;
   S.busy = true; render();
   try {
-    const { data, error } = await sb.storage.from('reports').download(path);
+    // immer die aktuelle Fassung holen (kein Zwischenspeicher – Blätter werden überschrieben)
+    const { data, error } = await sb.storage.from('reports').createSignedUrl(path, 120);
     if (error) throw error;
-    const bytes = new Uint8Array(await data.arrayBuffer());
+    const res = await fetch(`${data.signedUrl}&v=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status);
+    const bytes = new Uint8Array(await res.arrayBuffer());
     S.busy = false; render();
     await saveFile(bytes, name || `Arbeitszeitnachweis_${path.split('/').pop()}`);
   } catch (e) { S.busy = false; render(); toast(T().downloadFailed + (e.message || e), true); }
@@ -590,7 +593,7 @@ async function generatePdf(monday) {
     const { buildWeekPdf } = await import('./lib/pdf.js');
     const bytes = await buildWeekPdf(w, saldo, await getLogo(), pdfLang());
     const path = `${S.user.id}/${w.year}-KW${String(w.week).padStart(2, '0')}.pdf`;
-    const up = await sb.storage.from('reports').upload(path, new Blob([bytes], { type: 'application/pdf' }), { upsert: true, contentType: 'application/pdf' });
+    const up = await sb.storage.from('reports').upload(path, new Blob([bytes], { type: 'application/pdf' }), { upsert: true, contentType: 'application/pdf', cacheControl: '0' });
     if (up.error) throw up.error;
     const { error } = await sb.from('weekly_reports').upsert({
       week_start: monday, year: w.year, week: w.week, soll: w.soll, ist: w.ist, diff: w.diff, saldo, pdf_path: path,
@@ -818,6 +821,7 @@ async function loadExpenses() {
 
 // Spesenblätter prüfen: stimmen Summe/Anzahl nicht (z. B. Änderung vor diesem Update), sofort neu erstellen
 let fixingSheets = false;
+const SHEET_LAYOUT = '2026-10-26T06:30:00Z';   // Blätter, die vorher erstellt wurden, bekommen das neue Layout
 async function fixStaleSheets() {
   if (fixingSheets || !S.user) return;
   const cur = dayKey(new Date()).slice(0, 7);
@@ -826,7 +830,8 @@ async function fixStaleSheets() {
     const rep = S.expReports.find((r) => r.month === ym);
     const items = S.expenses.filter((x) => x.day.startsWith(ym));
     if (!rep) return ym < cur && items.length > 0;
-    return Math.abs(Number(rep.total) - expenseTotals(items).total) > 0.004 || rep.count !== items.length;
+    return Math.abs(Number(rep.total) - expenseTotals(items).total) > 0.004 || rep.count !== items.length
+      || rep.created_at < SHEET_LAYOUT;   // altes Layout (z. B. mit Unterschriften) -> neu erstellen
   });
   if (!stale.length) return;
   fixingSheets = true;
@@ -1097,7 +1102,7 @@ async function refreshSheets(days) {
       }
       const { buildExpensePdf } = await import('./lib/pdf-expense.js');
       const bytes = await buildExpensePdf(ym, items, new Map(), await getLogo(), pdfLang());
-      const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
+      const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf', cacheControl: '0' });
       if (up.error) throw up.error;
       const { error } = await sb.from('expense_reports').upsert({
         month: ym, total: expenseTotals(items).total, count: items.length, pdf_path: path, created_at: new Date().toISOString(),
