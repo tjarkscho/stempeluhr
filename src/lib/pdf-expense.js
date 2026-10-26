@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { CONFIG } from '../config.js';
 import { fmtDate } from './time.js';
 import { expenseTotals, fmtChf, CATEGORIES, cleanRoute } from './receipt.js';
+import { pdfText } from './pdf-i18n.js';
 
 const C = {
   text: rgb(0.11, 0.12, 0.14),
@@ -12,12 +13,13 @@ const C = {
   band: rgb(0.965, 0.968, 0.975),
   neg: rgb(0.68, 0.16, 0.13),
 };
-const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 export const CAT_DE = { essen: 'Verpflegung', fahrt: 'Fahrt', material: 'Material', uebernachtung: 'Übernachtung', anderes: 'Anderes', km: 'Fahrt Privatauto' };
 const kmTxt = (km) => String(Number(km)).replace('.', ',');
 // doppelte "und zurück" (alte Einträge) bereinigen
 // Beschreibung: Hauptzeile + graue Zusatzzeile (bei Kilometern die Rechnung)
-const descMain = (it) => (it.category === 'km' ? cleanRoute(it.route) || 'Fahrt' : it.note || '');
+// Rück-Zusatz in der Sprache des Blatts
+const routeIn = (r, t) => cleanRoute(r).replace(/\s*(und zurück|aller-retour)$/i, (m) => (m ? ` ${t.retSuffix}` : ''));
+const descMain = (it, t) => (it.category === 'km' ? routeIn(it.route, t) || t.trip : it.note || '');
 const descSub = (it) => (it.category === 'km'
   ? [`${kmTxt(it.km)} km x CHF ${fmtChf(CONFIG.kmRate)}`, it.note].filter(Boolean).join(' · ') : '');
 
@@ -30,13 +32,15 @@ const safe = (s) => String(s ?? '').replace(/[’‘]/g, "'").replace(/[“”�
  * @param items  [{ id, day, amount, category, note }] (nach Datum sortiert)
  * @param photos Map(id -> Uint8Array JPG/PNG)
  * @param logo   Uint8Array | null
- * @param opts   { draft: bool, stamp: 'Stand …', receiptsOnly: nur die Belegfotos }
+ * @param opts   { draft: bool, stamp: 'Stand …', receiptsOnly: nur die Belegfotos, lang: 'de' | 'fr' }
  */
 export async function buildExpensePdf(ym, items, photos = new Map(), logo = null, opts = {}) {
   const [y, m] = ym.split('-').map(Number);
-  const name = `${MONTHS[m - 1]} ${y}`;
+  const t = pdfText(opts.lang);
+  const CAT = t.cat;
+  const name = `${t.months[m - 1]} ${y}`;
   const doc = await PDFDocument.create();
-  doc.setTitle(opts.receiptsOnly ? `Belege ${name}` : `Spesenabrechnung ${name}`);
+  doc.setTitle(opts.receiptsOnly ? `${t.receipts} ${name}` : `${t.expSheet} ${name}`);
   doc.setAuthor(CONFIG.employee);
   const W = 595.28, H = 841.89, M = 50;
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -58,7 +62,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   const footer = (n) => {
     hline(M - 6, 0.4);
     text(`${CONFIG.employee} · ${CONFIG.company}`, M, M - 19, { size: 7.5, color: C.faint });
-    text(`Spesen ${name} · Seite ${n}`, W - M, M - 19, { size: 7.5, color: C.faint, align: 'right' });
+    text(t.expFooter(name, n), W - M, M - 19, { size: 7.5, color: C.faint, align: 'right' });
   };
   let pageNo = 0;
   const newPage = () => { page = doc.addPage([W, H]); pageNo++; footer(pageNo); };
@@ -71,12 +75,12 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
     const s = Math.min(32 / img.height, 150 / img.width);
     page.drawImage(img, { x: M, y: yy - img.height * s, width: img.width * s, height: img.height * s });
   }
-  text(opts.draft ? 'SPESENABRECHNUNG · ZWISCHENSTAND' : 'SPESENABRECHNUNG', W - M, yy - 10, { f: bold, size: 8, color: opts.draft ? C.neg : C.muted, align: 'right' });
+  text((opts.draft ? `${t.expSheet} · ${t.draft}` : t.expSheet).toUpperCase(), W - M, yy - 10, { f: bold, size: 8, color: opts.draft ? C.neg : C.muted, align: 'right' });
   text(name, W - M, yy - 32, { f: bold, size: 20, align: 'right' });
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   text(`01.${String(m).padStart(2, '0')}.${y} – ${last}.${String(m).padStart(2, '0')}.${y}${opts.draft ? ` · ${opts.stamp || ''}` : ''}`, W - M, yy - 46, { size: 9, color: C.muted, align: 'right' });
   yy -= 76;
-  const meta = [['Mitarbeiter', CONFIG.employee], ['Firma', CONFIG.company], ['Belege', String(items.length)]];
+  const meta = [[t.employee, CONFIG.employee], [t.company, CONFIG.company], [t.receipts, String(items.length)]];
   const colW = (W - 2 * M) / 3;
   meta.forEach(([k, v], i) => {
     text(k.toUpperCase(), M + i * colW, yy, { size: 7, color: C.muted, f: bold });
@@ -89,7 +93,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   const X = { nr: M, date: M + 30, cat: M + 96, note: M + 180, amt: W - M };
   const head = () => {
     yy -= 20;
-    for (const [h, x, a] of [['Nr.', X.nr], ['Datum', X.date], ['Kategorie', X.cat], ['Beschreibung', X.note], ['Betrag CHF', X.amt, 'right']])
+    for (const [h, x, a] of [[t.nr, X.nr], [t.date, X.date], [t.category, X.cat], [t.desc, X.note], [t.amount, X.amt, 'right']])
       text(h.toUpperCase(), x, yy, { size: 6.5, f: bold, color: C.muted, align: a });
     yy -= 8;
     hline(yy, 0.8, C.faint);
@@ -108,20 +112,20 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
     return lines;
   };
   items.forEach((it, i) => {
-    const main = wrap(descMain(it) || '–', 9), sub = descSub(it) ? wrap(descSub(it), 7.5) : [];
+    const main = wrap(descMain(it, t) || '–', 9), sub = descSub(it) ? wrap(descSub(it), 7.5) : [];
     const rowH = Math.max(20, 9 + main.length * 11 + sub.length * 9.5);
     if (yy - rowH < M + 30) { newPage(); yy = H - M; head(); }
     yy -= rowH;
     const top = yy + rowH - 13;
     text(String(i + 1), X.nr, top, { color: C.muted });
     text(fmtDate(it.day), X.date, top);
-    text(CAT_DE[it.category] || CAT_DE.anderes, X.cat, top, { color: C.muted });
-    main.forEach((l, k) => text(l, X.note, top - k * 11, { color: descMain(it) ? C.text : C.faint }));
+    text(CAT[it.category] || CAT.anderes, X.cat, top, { color: C.muted });
+    main.forEach((l, k) => text(l, X.note, top - k * 11, { color: descMain(it, t) ? C.text : C.faint }));
     sub.forEach((l, k) => text(l, X.note, top - main.length * 11 - k * 9.5 + 1, { size: 7.5, color: C.muted }));
     text(fmtChf(it.amount), X.amt, top, { align: 'right', f: bold });
     hline(yy, 0.4);
   });
-  if (!items.length) { yy -= rowH; text('Keine Belege in diesem Monat.', M, yy + 7, { color: C.muted }); }
+  if (!items.length) { yy -= 20; text(t.noReceipts, M, yy + 7, { color: C.muted }); }
 
   // ---- Zusammenfassung ----
   const tot = expenseTotals(items);
@@ -129,7 +133,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   const need = 30 + 54 + 110;
   if (yy - need < M + 20) { newPage(); yy = H - M; }
   yy -= 30 + 54;
-  const cells = [...cats.map((c) => [c === 'km' ? 'Privatauto' : CAT_DE[c], fmtChf(tot.byCat[c])]), ['Total CHF', fmtChf(tot.total)]].slice(-6);
+  const cells = [...cats.map((c) => [c === 'km' ? t.privateCar : CAT[c], fmtChf(tot.byCat[c])]), [t.totalChf, fmtChf(tot.total)]].slice(-6);
   const bandH = 54, cw = (W - 2 * M) / cells.length;
   page.drawRectangle({ x: M, y: yy, width: W - 2 * M, height: bandH, color: C.band });
   cells.forEach(([k, v], i) => {
@@ -142,15 +146,15 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   // ---- Unterschriften ----
   yy -= 62;
   const sw = (W - 2 * M - 40) / 2;
-  for (const [i, lab] of ['Datum, Unterschrift Mitarbeiter', 'Datum, Visum Vorgesetzte/r'].entries()) {
+  for (const [i, lab] of [t.signEmp, t.signBoss].entries()) {
     const x = M + i * (sw + 40);
     page.drawLine({ start: { x, y: yy }, end: { x: x + sw, y: yy }, thickness: 0.6, color: C.faint });
     text(lab, x, yy - 12, { size: 7.5, color: C.muted });
   }
   yy -= 34;
-  if (opts.draft) text(`Zwischenstand – ${opts.stamp || ''}. Noch kein abgeschlossenes Spesenblatt.`, M, yy, { size: 7.5, color: C.muted });
-  else if (items.some((it) => it.photo_path)) text('Belegfotos separat als PDF, nummeriert wie in der Tabelle.', M, yy, { size: 7.5, color: C.muted });
-  if (items.some((it) => it.category === 'km')) { yy -= 11; text(`Fahrt Privatauto: CHF ${fmtChf(CONFIG.kmRate)} pro km.`, M, yy, { size: 7.5, color: C.muted }); }
+  if (opts.draft) text(t.expDraftNote(opts.stamp || ''), M, yy, { size: 7.5, color: C.muted });
+  else if (items.some((it) => it.photo_path)) text(t.photosSeparate, M, yy, { size: 7.5, color: C.muted });
+  if (items.some((it) => it.category === 'km')) { yy -= 11; text(t.kmRule(fmtChf(CONFIG.kmRate)), M, yy, { size: 7.5, color: C.muted }); }
 
   }
 
@@ -162,13 +166,14 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
     for (let j = 0; j < 2 && k + j < withPhoto.length; j++) {
       const { it, nr, bytes } = withPhoto[k + j];
       const top = H - M - j * (slotH + 20);
-      text(`Beleg ${nr}`, M, top - 10, { f: bold, size: 10 });
-      text(`${fmtDate(it.day)} · ${CAT_DE[it.category] || ''} · CHF ${fmtChf(it.amount)}${it.note ? ` · ${it.note}` : ''}`, M + 56, top - 10,
-        { size: 9, color: C.muted, maxW: W - 2 * M - 56 });
+      const cap = `${t.receipt} ${nr}`, cx = M + bold.widthOfTextAtSize(cap, 10) + 12;
+      text(cap, M, top - 10, { f: bold, size: 10 });
+      text(`${fmtDate(it.day)} · ${CAT[it.category] || ''} · CHF ${fmtChf(it.amount)}${it.note ? ` · ${it.note}` : ''}`, cx, top - 10,
+        { size: 9, color: C.muted, maxW: W - M - cx });
       let ph = null;
       try { ph = (bytes[0] === 0x89 && bytes[1] === 0x50) ? await doc.embedPng(bytes) : await doc.embedJpg(bytes); } catch { ph = null; }
       const boxW = W - 2 * M, boxH = slotH - 26;
-      if (!ph) { text('Foto konnte nicht gelesen werden.', M, top - 40, { color: C.neg }); continue; }
+      if (!ph) { text(t.photoBad, M, top - 40, { color: C.neg }); continue; }
       const s = Math.min(boxW / ph.width, boxH / ph.height);
       const w = ph.width * s, h = ph.height * s;
       page.drawImage(ph, { x: M + (boxW - w) / 2, y: top - 22 - h, width: w, height: h });
