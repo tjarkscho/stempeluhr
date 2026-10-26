@@ -143,15 +143,8 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
     if (i) page.drawLine({ start: { x: M + i * cw, y: yy + 11 }, end: { x: M + i * cw, y: yy + bandH - 11 }, thickness: 0.5, color: C.line });
   });
 
-  // ---- Unterschriften ----
-  yy -= 62;
-  const sw = (W - 2 * M - 40) / 2;
-  for (const [i, lab] of [t.signEmp, t.signBoss].entries()) {
-    const x = M + i * (sw + 40);
-    page.drawLine({ start: { x, y: yy }, end: { x: x + sw, y: yy }, thickness: 0.6, color: C.faint });
-    text(lab, x, yy - 12, { size: 7.5, color: C.muted });
-  }
-  yy -= 34;
+  // ---- Fussnoten (keine Unterschriftsfelder) ----
+  yy -= 24;
   if (opts.draft) text(t.expDraftNote(opts.stamp || ''), M, yy, { size: 7.5, color: C.muted });
   else if (items.some((it) => it.photo_path)) text(t.photosSeparate, M, yy, { size: 7.5, color: C.muted });
   if (items.some((it) => it.category === 'km')) { yy -= 11; text(t.kmRule(fmtChf(CONFIG.kmRate)), M, yy, { size: 7.5, color: C.muted }); }
