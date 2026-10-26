@@ -24,6 +24,18 @@ if (!URL_ || !KEY) {
 
 const sb = createClient(URL_, KEY);
 
+// Nach einem Update fehlen die alten Programmteile auf dem Server -> Seite einmal neu laden
+function reloadForUpdate() {
+  try {
+    const last = +sessionStorage.getItem('stempeluhr.reload') || 0;
+    if (Date.now() - last < 60000) return false;          // keine Endlosschleife
+    sessionStorage.setItem('stempeluhr.reload', String(Date.now()));
+  } catch { /* egal */ }
+  location.reload();
+  return true;
+}
+window.addEventListener('vite:preloadError', (e) => { if (reloadForUpdate()) e.preventDefault(); });
+
 const S = {
   locked: (() => { try { return !!JSON.parse(localStorage.getItem('stempeluhr.lock') || 'null')?.id; } catch { return false; } })(),
   bioAvail: false,
@@ -72,6 +84,7 @@ const ICON = {
 };
 
 function toast(msg, err = false) {
+  if (err && /dynamically imported module|Importing a module script failed|error loading dynamically/i.test(msg) && reloadForUpdate()) return;
   S.toast = { msg, err };
   render();
   clearTimeout(toast.t);
