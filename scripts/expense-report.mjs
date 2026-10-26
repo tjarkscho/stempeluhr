@@ -54,14 +54,8 @@ for (const ym of [...new Set(todo)]) {
   if (!MONTH && rep && ym !== curYm && newest <= rep.created_at) { console.log(`${ym}: aktuell.`); continue; }
   if (!MONTH && rep && ym === curYm && newest <= rep.created_at) { console.log(`${ym}: heute schon erstellt.`); continue; }
 
-  const photos = new Map();
-  for (const x of items) {
-    if (!x.photo_path) continue;
-    const { data, error } = await sb.storage.from('receipts').download(x.photo_path);
-    if (error) { console.warn(`Foto fehlt: ${x.photo_path}`); continue; }
-    photos.set(x.id, new Uint8Array(await data.arrayBuffer()));
-  }
-  const bytes = await buildExpensePdf(ym, items, photos, logo);
+  // Belegfotos kommen nicht ins Spesenblatt – sie sind in der App separat abrufbar
+  const bytes = await buildExpensePdf(ym, items, new Map(), logo);
   const path = `${user.id}/Spesen-${ym}.pdf`;
   const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
   if (up.error) throw up.error;
