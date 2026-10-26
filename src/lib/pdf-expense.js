@@ -30,13 +30,13 @@ const safe = (s) => String(s ?? '').replace(/[’‘]/g, "'").replace(/[“”�
  * @param items  [{ id, day, amount, category, note }] (nach Datum sortiert)
  * @param photos Map(id -> Uint8Array JPG/PNG)
  * @param logo   Uint8Array | null
- * @param opts   { draft: bool, stamp: 'Stand …' }
+ * @param opts   { draft: bool, stamp: 'Stand …', receiptsOnly: nur die Belegfotos }
  */
 export async function buildExpensePdf(ym, items, photos = new Map(), logo = null, opts = {}) {
   const [y, m] = ym.split('-').map(Number);
   const name = `${MONTHS[m - 1]} ${y}`;
   const doc = await PDFDocument.create();
-  doc.setTitle(`Spesenabrechnung ${name}`);
+  doc.setTitle(opts.receiptsOnly ? `Belege ${name}` : `Spesenabrechnung ${name}`);
   doc.setAuthor(CONFIG.employee);
   const W = 595.28, H = 841.89, M = 50;
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -63,6 +63,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   let pageNo = 0;
   const newPage = () => { page = doc.addPage([W, H]); pageNo++; footer(pageNo); };
 
+  if (!opts.receiptsOnly) {
   // ---- Kopf ----
   newPage();
   let yy = H - M;
@@ -128,7 +129,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   const need = 30 + 54 + 110;
   if (yy - need < M + 20) { newPage(); yy = H - M; }
   yy -= 30 + 54;
-  const cells = [...cats.map((c) => [CAT_DE[c], fmtChf(tot.byCat[c])]), ['Total CHF', fmtChf(tot.total)]].slice(-6);
+  const cells = [...cats.map((c) => [c === 'km' ? 'Privatauto' : CAT_DE[c], fmtChf(tot.byCat[c])]), ['Total CHF', fmtChf(tot.total)]].slice(-6);
   const bandH = 54, cw = (W - 2 * M) / cells.length;
   page.drawRectangle({ x: M, y: yy, width: W - 2 * M, height: bandH, color: C.band });
   cells.forEach(([k, v], i) => {
@@ -148,8 +149,10 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   }
   yy -= 34;
   if (opts.draft) text(`Zwischenstand – ${opts.stamp || ''}. Noch kein abgeschlossenes Spesenblatt.`, M, yy, { size: 7.5, color: C.muted });
-  else if (items.length) text('Belegfotos im Anhang, nummeriert wie in der Tabelle.', M, yy, { size: 7.5, color: C.muted });
+  else if (items.some((it) => it.photo_path)) text('Belegfotos separat als PDF, nummeriert wie in der Tabelle.', M, yy, { size: 7.5, color: C.muted });
   if (items.some((it) => it.category === 'km')) { yy -= 11; text(`Fahrt Privatauto: CHF ${fmtChf(CONFIG.kmRate)} pro km.`, M, yy, { size: 7.5, color: C.muted }); }
+
+  }
 
   // ---- Belegfotos: 2 pro Seite ----
   const withPhoto = items.map((it, i) => ({ it, nr: i + 1, bytes: photos.get(it.id) })).filter((x) => x.bytes);
