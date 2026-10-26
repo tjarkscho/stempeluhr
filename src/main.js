@@ -963,6 +963,7 @@ async function saveExpense() {
   S.busy = true; render();
   try {
     const row = { day: x.day, amount: Math.round(amount * 100) / 100, category: x.category, note: (x.note || '').trim() };
+    const origDay = x.id ? S.expenses.find((e) => e.id === x.id)?.day : null;
     if (x.id) {
       const { error } = await sb.from('expenses').update(row).eq('id', x.id);
       if (error) throw error;
@@ -981,6 +982,7 @@ async function saveExpense() {
     await loadExpenses();
     render();
     toast(x.id ? L.expSaved : L.expAdded(fmtChf(row.amount)));
+    refreshSheets([x.day, origDay]);
   } catch (e) { S.busy = false; render(); toast(L.error + (e.message || e), true); }
 }
 
@@ -994,6 +996,7 @@ async function saveKm() {
   S.busy = true; render();
   try {
     const row = { day: x.day, amount, category: 'km', km, route, note: (x.note || '').trim() };
+    const origDay = x.id ? S.expenses.find((e) => e.id === x.id)?.day : null;
     const { error } = x.id ? await sb.from('expenses').update(row).eq('id', x.id) : await sb.from('expenses').insert(row);
     if (error) throw error;
     S.expMonth = x.day.slice(0, 7);
@@ -1002,6 +1005,7 @@ async function saveKm() {
     await loadExpenses();
     render();
     toast(L.expKmAdded(String(km).replace('.', ','), fmtChf(amount)));
+    refreshSheets([x.day, origDay]);
   } catch (e) { S.busy = false; render(); toast(L.error + (e.message || e), true); }
 }
 
@@ -1016,7 +1020,51 @@ async function deleteExpense(btn) {
     if (x.photo_path) await sb.storage.from('receipts').remove([x.photo_path]);
     S.exp = null; S.busy = false;
     await loadExpenses(); render();
+    refreshSheets([x.day]);
   } catch (e) { S.busy = false; render(); toast(L.error + (e.message || e), true); }
+}
+
+const monthItems = (ym) => S.expenses.filter((x) => x.day.startsWith(ym))
+  .sort((a, b) => a.day.localeCompare(b.day) || a.created_at.localeCompare(b.created_at));
+async function loadPhotos(items) {
+  const photos = new Map();
+  await Promise.all(items.filter((x) => x.photo_path).map(async (x) => {
+    const { data } = await sb.storage.from('receipts').download(x.photo_path);
+    if (data) photos.set(x.id, new Uint8Array(await data.arrayBuffer()));
+  }));
+  return photos;
+}
+
+// Nach einer Änderung: Spesenblatt eines abgeschlossenen (oder schon erstellten) Monats sofort neu erzeugen
+async function refreshSheets(days) {
+  const months = [...new Set(days.filter(Boolean).map((d) => d.slice(0, 7)))];
+  const today = dayKey(new Date()), cur = today.slice(0, 7);
+  for (const ym of months) {
+    const rep = S.expReports.find((r) => r.month === ym);
+    const due = rep || ym < cur || today >= lastWorkday(ym, (d) => !!holidayName(d));
+    if (!due) continue;
+    try {
+      const items = monthItems(ym);
+      const path = `${S.user.id}/Spesen-${ym}.pdf`;
+      if (!items.length) {
+        if (rep) {
+          await sb.from('expense_reports').delete().eq('month', ym);
+          await sb.storage.from('reports').remove([rep.pdf_path]);
+        }
+        continue;
+      }
+      const { buildExpensePdf } = await import('./lib/pdf-expense.js');
+      const bytes = await buildExpensePdf(ym, items, await loadPhotos(items), await getLogo());
+      const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
+      if (up.error) throw up.error;
+      const { error } = await sb.from('expense_reports').upsert({
+        month: ym, total: expenseTotals(items).total, count: items.length, pdf_path: path, created_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,month' });
+      if (error) throw error;
+      toast(T().expSheetUpdated(monthLabel(ym)));
+    } catch (e) { toast(T().error + (e.message || e), true); }
+  }
+  await loadExpenses().catch(() => {});
 }
 
 async function expenseDraftPdf() {
@@ -1024,12 +1072,8 @@ async function expenseDraftPdf() {
   S.busy = true; render();
   try {
     const ym = S.expMonth;
-    const items = S.expenses.filter((x) => x.day.startsWith(ym)).sort((a, b) => a.day.localeCompare(b.day) || a.created_at.localeCompare(b.created_at));
-    const photos = new Map();
-    await Promise.all(items.filter((x) => x.photo_path).map(async (x) => {
-      const { data } = await sb.storage.from('receipts').download(x.photo_path);
-      if (data) photos.set(x.id, new Uint8Array(await data.arrayBuffer()));
-    }));
+    const items = monthItems(ym);
+    const photos = await loadPhotos(items);
     const { buildExpensePdf } = await import('./lib/pdf-expense.js');
     const now = new Date();
     const bytes = await buildExpensePdf(ym, items, photos, await getLogo(),
