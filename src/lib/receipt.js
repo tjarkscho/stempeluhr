@@ -58,6 +58,9 @@ export function parseReceipt(text, today = new Date()) {
 export const CATEGORIES = ['essen', 'fahrt', 'material', 'uebernachtung', 'anderes', 'km'];
 export const PHOTO_CATS = CATEGORIES.filter((c) => c !== 'km');
 
+/** doppelte "und zurück" (ältere Einträge) bereinigen */
+export const cleanRoute = (r) => String(r || '').replace(/(\s*und zurück)+$/i, ' und zurück').replace(/(\s*aller-retour)+$/i, ' aller-retour').trim();
+
 /** Kilometer-Betrag (Rappen-genau) */
 export const kmAmount = (km, rate) => Math.round(Number(km || 0) * rate * 100) / 100;
 
