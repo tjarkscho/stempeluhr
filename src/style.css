@@ -399,3 +399,7 @@ input.flash { animation: flash 1.2s ease-out; }
   background: color-mix(in srgb, var(--accent) 8%, var(--card)); font-variant-numeric: tabular-nums; }
 .km-formula { color: var(--muted); font-size: 14px; }
 .km-amt { font-size: 22px; }
+.exp-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.exp-btns .btn { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.exp-btns .btn:only-child { grid-column: 1 / -1; }
+.exp-dl { display: inline-flex; align-items: center; gap: 6px; margin: -4px auto 0; font-size: 14px; }
