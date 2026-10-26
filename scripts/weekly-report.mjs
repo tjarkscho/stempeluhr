@@ -51,7 +51,7 @@ for (let m = mondayOf(CONFIG.startDate); m <= lastMonday; m = addDays(m, 7)) {
   const saldo = saldoThrough(m, byDay, absences, now);
   const bytes = await buildWeekPdf(w, saldo, logo, { lang: user.user_metadata?.lang });
   const path = `${user.id}/${w.year}-KW${String(w.week).padStart(2, '0')}.pdf`;
-  const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
+  const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf', cacheControl: '0' });
   if (up.error) throw up.error;
   const { error } = await sb.from('weekly_reports').upsert({
     user_id: user.id, week_start: m, year: w.year, week: w.week,
