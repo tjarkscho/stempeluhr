@@ -57,7 +57,7 @@ for (const ym of [...new Set(todo)]) {
   // Belegfotos kommen nicht ins Spesenblatt – sie sind in der App separat abrufbar
   const bytes = await buildExpensePdf(ym, items, new Map(), logo, { lang: user.user_metadata?.lang });
   const path = `${user.id}/Spesen-${ym}.pdf`;
-  const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
+  const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf', cacheControl: '0' });
   if (up.error) throw up.error;
   const tot = expenseTotals(items);
   const { error } = await sb.from('expense_reports').upsert({
