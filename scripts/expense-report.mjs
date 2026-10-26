@@ -55,7 +55,7 @@ for (const ym of [...new Set(todo)]) {
   if (!MONTH && rep && ym === curYm && newest <= rep.created_at) { console.log(`${ym}: heute schon erstellt.`); continue; }
 
   // Belegfotos kommen nicht ins Spesenblatt – sie sind in der App separat abrufbar
-  const bytes = await buildExpensePdf(ym, items, new Map(), logo);
+  const bytes = await buildExpensePdf(ym, items, new Map(), logo, { lang: user.user_metadata?.lang });
   const path = `${user.id}/Spesen-${ym}.pdf`;
   const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf' });
   if (up.error) throw up.error;
