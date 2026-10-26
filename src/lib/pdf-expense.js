@@ -2,7 +2,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { CONFIG } from '../config.js';
 import { fmtDate } from './time.js';
-import { expenseTotals, fmtChf, CATEGORIES } from './receipt.js';
+import { expenseTotals, fmtChf, CATEGORIES, cleanRoute } from './receipt.js';
 
 const C = {
   text: rgb(0.11, 0.12, 0.14),
@@ -13,12 +13,13 @@ const C = {
   neg: rgb(0.68, 0.16, 0.13),
 };
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-export const CAT_DE = { essen: 'Verpflegung', fahrt: 'Fahrt', material: 'Material', uebernachtung: 'Übernachtung', anderes: 'Anderes', km: 'Kilometer' };
+export const CAT_DE = { essen: 'Verpflegung', fahrt: 'Fahrt', material: 'Material', uebernachtung: 'Übernachtung', anderes: 'Anderes', km: 'Fahrt Privatauto' };
 const kmTxt = (km) => String(Number(km)).replace('.', ',');
-// Beschreibung: bei Kilometern Strecke + Rechnung, sonst Kommentar
-const desc = (it) => (it.category === 'km'
-  ? [it.route, `${kmTxt(it.km)} km x ${fmtChf(CONFIG.kmRate)}`, it.note].filter(Boolean).join(' · ')
-  : it.note || '');
+// doppelte "und zurück" (alte Einträge) bereinigen
+// Beschreibung: Hauptzeile + graue Zusatzzeile (bei Kilometern die Rechnung)
+const descMain = (it) => (it.category === 'km' ? cleanRoute(it.route) || 'Fahrt' : it.note || '');
+const descSub = (it) => (it.category === 'km'
+  ? [`${kmTxt(it.km)} km x CHF ${fmtChf(CONFIG.kmRate)}`, it.note].filter(Boolean).join(' · ') : '');
 
 // Helvetica (WinAnsi) kann nicht alle Zeichen – Unbekanntes ersetzen statt abstürzen
 const safe = (s) => String(s ?? '').replace(/[’‘]/g, "'").replace(/[“”„]/g, '"').replace(/[–—]/g, '-')
@@ -93,15 +94,30 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
     hline(yy, 0.8, C.faint);
   };
   head();
-  const rowH = 20;
+  // Beschreibung umbrechen statt abschneiden
+  const descW = X.amt - X.note - 64;
+  const wrap = (str, size) => {
+    const words = safe(str).split(' '), lines = [];
+    let cur = '';
+    for (const w of words) {
+      const t = cur ? `${cur} ${w}` : w;
+      if (font.widthOfTextAtSize(t, size) > descW && cur) { lines.push(cur); cur = w; } else cur = t;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  };
   items.forEach((it, i) => {
+    const main = wrap(descMain(it) || '–', 9), sub = descSub(it) ? wrap(descSub(it), 7.5) : [];
+    const rowH = Math.max(20, 9 + main.length * 11 + sub.length * 9.5);
     if (yy - rowH < M + 30) { newPage(); yy = H - M; head(); }
     yy -= rowH;
-    text(String(i + 1), X.nr, yy + 7, { color: C.muted });
-    text(fmtDate(it.day), X.date, yy + 7);
-    text(CAT_DE[it.category] || CAT_DE.anderes, X.cat, yy + 7, { color: C.muted });
-    text(desc(it) || '–', X.note, yy + 7, { maxW: X.amt - X.note - 70, color: desc(it) ? C.text : C.faint });
-    text(fmtChf(it.amount), X.amt, yy + 7, { align: 'right', f: bold });
+    const top = yy + rowH - 13;
+    text(String(i + 1), X.nr, top, { color: C.muted });
+    text(fmtDate(it.day), X.date, top);
+    text(CAT_DE[it.category] || CAT_DE.anderes, X.cat, top, { color: C.muted });
+    main.forEach((l, k) => text(l, X.note, top - k * 11, { color: descMain(it) ? C.text : C.faint }));
+    sub.forEach((l, k) => text(l, X.note, top - main.length * 11 - k * 9.5 + 1, { size: 7.5, color: C.muted }));
+    text(fmtChf(it.amount), X.amt, top, { align: 'right', f: bold });
     hline(yy, 0.4);
   });
   if (!items.length) { yy -= rowH; text('Keine Belege in diesem Monat.', M, yy + 7, { color: C.muted }); }
@@ -133,7 +149,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
   yy -= 34;
   if (opts.draft) text(`Zwischenstand – ${opts.stamp || ''}. Noch kein abgeschlossenes Spesenblatt.`, M, yy, { size: 7.5, color: C.muted });
   else if (items.length) text('Belegfotos im Anhang, nummeriert wie in der Tabelle.', M, yy, { size: 7.5, color: C.muted });
-  if (items.some((it) => it.category === 'km')) { yy -= 11; text(`Kilometer: Fahrten mit Privatauto, CHF ${fmtChf(CONFIG.kmRate)} pro km.`, M, yy, { size: 7.5, color: C.muted }); }
+  if (items.some((it) => it.category === 'km')) { yy -= 11; text(`Fahrt Privatauto: CHF ${fmtChf(CONFIG.kmRate)} pro km.`, M, yy, { size: 7.5, color: C.muted }); }
 
   // ---- Belegfotos: 2 pro Seite ----
   const withPhoto = items.map((it, i) => ({ it, nr: i + 1, bytes: photos.get(it.id) })).filter((x) => x.bytes);
