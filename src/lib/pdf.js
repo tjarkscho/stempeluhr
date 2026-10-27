@@ -97,6 +97,7 @@ export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
     if (has) {
       text(hhmm(d.in) + star(d.manualIn), X.in, y + 8, { align: 'right' });
       text(d.out ? hhmm(d.out) + star(d.manualOut) : '–', X.out, y + 8, { align: 'right' });
+      if (d.overnight) text(t.nextDay, X.out + 2, y + 12, { size: 6, color: C.muted });   // Ausstempeln am Folgetag
       const pz = fmtMin(d.pause) + star(d.manualPause);
       if (d.autoPause) {   // hochgestellte 1 = Fussnote "Pause auf gesetzliches Minimum erhöht"
         anyAuto = true;
@@ -107,7 +108,7 @@ export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
     const future = opts.draft && opts.today && d.day > opts.today;
     const tot = future ? '' : d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '');
     text(tot, X.total, y + 8, { align: 'right', f: bold });
-    const notes = [t.label(d.label), d.bonus ? `+${Math.round(d.rate * 100)} % (+${fmtMin(d.bonus)})` : null,
+    const notes = [t.label(d.label), d.bonus ? t.bonusNote(fmtMin(d.bonus)) : null, d.nightMin ? t.nightNote(fmtMin(d.nightMin)) : null,
       d.incomplete ? t.missingOut : null].filter(Boolean).join(' · ');
     if (notes) text(notes, X.note, y + 8, { size: 8.5, color: C.muted });
     hline(y, 0.4);
