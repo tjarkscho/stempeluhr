@@ -121,10 +121,11 @@ export async function buildMonthPdf(ym, st, saldo, logo = null, opts = {}) {
       const st_ = (b) => (b ? (manual = true, '*') : '');
       text(hhmm(d.in) + st_(d.manualIn), X.in, y + 5, { align: 'right', color: col });
       text(d.out ? hhmm(d.out) + st_(d.manualOut) : '–', X.out, y + 5, { align: 'right', color: col });
+      if (d.overnight) text(t.nextDay, X.out + 2, y + 8, { size: 5.5, color: C.muted });
       text(fmtMin(d.pause), X.pause, y + 5, { align: 'right', color: C.muted });
     }
     if (d.counted && d.done && (d.dayTotal || d.soll)) text(fmtMin(d.dayTotal), X.total, y + 5, { align: 'right', f: bold, color: col });
-    const notes = [t.label(d.label), d.bonus ? `+${Math.round(d.rate * 100)} %` : null].filter(Boolean).join(' · ');
+    const notes = [t.label(d.label), d.bonus ? t.bonusNote(fmtMin(d.bonus)) : null, d.nightMin ? t.nightNote(fmtMin(d.nightMin)) : null].filter(Boolean).join(' · ');
     if (notes) text(notes, X.note, y + 5, { size: 8, color: C.muted });
     if (wd === 6) hline(y, 0.5, C.line);
   }
