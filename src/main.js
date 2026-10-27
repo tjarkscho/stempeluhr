@@ -7,6 +7,7 @@ import {
 } from './lib/time.js';
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
+import { legalText } from './lib/legal.js';
 import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, PHOTO_CATS, kmAmount, lastWorkday, cleanRoute } from './lib/receipt.js';
 import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt, dayRecord, lawBreak } from './lib/calc.js';
 
@@ -833,9 +834,19 @@ function prefsControls() {
 }
 
 function viewSettings() {
+  const G = legalText(prefs.lang);
+  if (S.settings === 'legal') return `<div class="modal" data-act="setclose"><div class="sheet legal" data-stop="1">
+    <div class="sheethead"><button class="icon" data-act="legalback" aria-label="${prefs.lang === 'fr' ? 'Retour' : 'Zurück'}">${ICON.prev}</button><b>${G.title}</b><button class="icon" data-act="setclose">${ICON.close}</button></div>
+    <p class="legal-intro">${esc(G.intro)}</p>
+    ${G.sections.map(([t, ps]) => `<details><summary>${esc(t)}</summary>${ps.map((x) => `<p>${esc(x)}</p>`).join('')}</details>`).join('')}
+    <span class="plabel">${G.sources}</span>
+    <div class="legal-links">${G.links.map(([t, u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(t)}</a>`).join('')}</div>
+  </div></div>`;
   return `<div class="modal" data-act="setclose"><div class="sheet" data-stop="1">
     <div class="sheethead"><b>${T().settings}</b><button class="icon" data-act="setclose">${ICON.close}</button></div>
     ${prefsControls()}
+    <div class="prefs"><span class="plabel">${G.title}</span>
+    <button type="button" class="toggle navrow" data-act="legal"><span>${G.rowText}</span>${ICON.next}</button></div>
   </div></div>`;
 }
 
@@ -1412,6 +1423,8 @@ app.addEventListener('click', async (e) => {
   else if (a === 'pt') { S.chartSel = +el.dataset.i; render(); }
   else if (a === 'settings') { S.settings = true; enterAnim = 'sheet'; render(); }
   else if (a === 'setclose') { S.settings = false; render(); }
+  else if (a === 'legal') { S.settings = 'legal'; render(); }
+  else if (a === 'legalback') { S.settings = true; render(); }
   else if (a === 'pweye') { const i = el.parentElement.querySelector('input'); i.type = i.type === 'password' ? 'text' : 'password'; el.classList.toggle('on'); }
   else if (a === 'push') togglePush();
   else if (a === 'bio') toggleBio();
