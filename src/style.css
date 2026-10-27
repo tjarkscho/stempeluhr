@@ -404,3 +404,17 @@ input.flash { animation: flash 1.2s ease-out; }
 .exp-btns .btn:only-child { grid-column: 1 / -1; }
 .exp-dl { display: inline-flex; align-items: center; gap: 6px; margin: -4px auto 0; font-size: 14px; }
 .edrow .nextday { font-size: 11px; color: var(--muted); white-space: nowrap; align-self: center; }
+/* Legal */
+.navrow svg { flex: none; color: var(--muted); }
+.legal .sheethead b { flex: 1; text-align: center; }
+.legal-intro { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 0 0 12px; }
+.legal details { border-top: 1px solid var(--line); }
+.legal details:last-of-type { border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.legal summary { list-style: none; cursor: pointer; padding: 13px 2px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.legal summary::-webkit-details-marker { display: none; }
+.legal summary::after { content: '+'; color: var(--muted); font-weight: 400; font-size: 18px; line-height: 1; }
+.legal details[open] summary::after { content: '−'; }
+.legal details p { margin: 0 2px 10px; font-size: 14px; line-height: 1.5; }
+.legal details p:last-child { margin-bottom: 14px; }
+.legal-links { display: grid; gap: 6px; margin-top: 6px; }
+.legal-links a { color: var(--accent); font-size: 14px; }
