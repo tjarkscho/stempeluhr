@@ -175,14 +175,22 @@ async function loadAll() {
 }
 
 // ---------------- Stempeln ----------------
+// Arbeitstag, zu dem der aktuelle Einsatz gehört (nach Mitternacht noch der Vortag, solange eingestempelt)
+function shiftDay(now = new Date()) {
+  const today = dayKey(now), yd = addDays(today, -1);
+  const ye = S.byDay.get(yd);
+  if (!(S.byDay.get(today) || []).length && ye && dayStats(ye, false, now).open) return yd;
+  return today;
+}
+
 function todayInfo() {
   const now = new Date();
-  const today = dayKey(now);
+  const today = shiftDay(now);
   const events = S.byDay.get(today) || [];
   const st = dayStats(events, true, now);
-  // offener Vortag?
+  // vergessen auszustempeln?
   const last = S.entries[S.entries.length - 1];
-  const lastDay = last ? dayKey(new Date(last.ts)) : null;
+  const lastDay = [...S.byDay.keys()].pop() || null;
   const forgot = last && lastDay !== today && last.kind !== 'out' ? lastDay : null;
   return { now, today, events, st, forgot };
 }
@@ -287,7 +295,7 @@ app.addEventListener('pointercancel', endSlide);
 
 /** Differenz des noch laufenden heutigen Tages (0, wenn nicht eingestempelt) */
 function liveToday(now = new Date()) {
-  const today = dayKey(now);
+  const today = shiftDay(now);
   const st = dayStats(S.byDay.get(today) || [], true, now);
   if (!st.open || today < CONFIG.startDate) return 0;
   const t = dayTargets(today, S.absences);
@@ -375,7 +383,7 @@ function viewWeek() {
       <td>${has ? hhmm(d.in) + mark(d.manualIn) : ''}</td>
       <td>${has ? (d.out ? hhmm(d.out) + mark(d.manualOut) : (d.open ? '…' : '<b class="neg">?</b>')) : ''}</td>
       <td>${has ? fmtMin(d.pause) + mark(d.manualPause) : ''}</td>
-      <td class="r"><b>${d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '')}</b>${d.label ? `<div class="tag">${esc(label(d.label))}</div>` : ''}${d.bonus ? `<div class="tag">+${Math.round(d.rate * 100)} %</div>` : ''}</td>
+      <td class="r"><b>${d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '')}</b>${d.label ? `<div class="tag">${esc(label(d.label))}</div>` : ''}${d.bonus ? `<div class="tag">${L.bonusTag(fmtMin(d.bonus))}${d.nightMin ? ` · ${L.nightTag}` : ''}</div>` : ''}</td>
     </tr>`;
   }).join('');
   const done = addDays(m, 6) < today;
@@ -647,10 +655,10 @@ function viewEditor() {
   return `<div class="modal"><div class="sheet">
     <div class="sheethead"><b>${L.days[weekday(ed.day)]}, ${fmtDate(ed.day)}</b><button class="icon" data-act="edclose">${ICON.close}</button></div>
     ${ed.rows.length ? '' : `<p class="hint">${L.noEntries}</p>`}
-    ${ed.rows.map((r, i) => `<div class="edrow">
+    ${(() => { let prev = '', nd = false; return ed.rows.map((r, i) => { if (prev && r.time && r.time < prev) nd = true; prev = r.time || prev; return `<div class="edrow">
       <select data-ed="kind" data-i="${i}">${opts(r.kind)}</select>
-      <input type="time" value="${r.time}" data-ed="time" data-i="${i}" />
-      <button class="icon del" data-act="edrm" data-i="${i}">${ICON.trash}</button></div>`).join('')}
+      <input type="time" value="${r.time}" data-ed="time" data-i="${i}" />${nd ? `<small class="nextday">${L.nextDay}</small>` : ''}
+      <button class="icon del" data-act="edrm" data-i="${i}">${ICON.trash}</button></div>`; }).join(''); })()}
     <button class="btn ghost" data-act="edadd">${L.addEntry}</button>
     <p class="hint">${L.manualHint}</p>
     <button class="btn" data-act="edsave" ${S.busy ? 'disabled' : ''}>${L.save}</button>
@@ -660,8 +668,13 @@ function viewEditor() {
 async function saveEditor() {
   const ed = S.editor;
   if (ed.rows.some((r) => !/^\d\d:\d\d$/.test(r.time))) return toast(T().fillTimes, true);
-  const rows = ed.rows.map((r) => ({ ...r, ts: zurichToDate(ed.day, r.time).toISOString() }))
-    .sort((a, b) => a.ts.localeCompare(b.ts));
+  // Zeiten in Reihenfolge lesen: ist eine Zeit kleiner als die vorherige, liegt sie nach Mitternacht (Folgetag)
+  let dayOff = 0, prev = '';
+  const rows = ed.rows.map((r) => {
+    if (prev && r.time < prev) dayOff = 1;
+    prev = r.time;
+    return { ...r, ts: zurichToDate(addDays(ed.day, dayOff), r.time).toISOString() };
+  }).sort((a, b) => a.ts.localeCompare(b.ts));
   if (validateDay(rows)) return toast(T().badOrder, true);
 
   S.busy = true; render();
