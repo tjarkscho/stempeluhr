@@ -6,7 +6,7 @@ export const CONFIG = {
   kmRate: 0.8,            // Kilometerentschädigung Privatauto CHF/km
   sollDayMin: 480,         // 8:00 pro Arbeitstag (Mo–Fr) = 40:00 / Woche
   // Zuschläge auf gearbeitete Zeit (als Zeitgutschrift). Überstunden Mo–Fr: 1:1
-  surcharge: { saturday: 0.25, sunday: 0.5, holiday: 0.5 },
+  surcharge: { saturday: 0.25, sunday: 0.5, holiday: 0.5, night: 0.25 },   // Nacht 23–06 Uhr (ArG Art. 17b)
   calendarFrom: 2026,
   calendarTo: 2029,
 };
