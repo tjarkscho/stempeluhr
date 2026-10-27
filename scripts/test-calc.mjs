@@ -111,3 +111,37 @@ console.log('Starttag-Test OK');
   eq(expenseTotals([{ amount: 0.1, category: 'essen' }, { amount: 0.2, category: 'essen' }, { amount: 5, category: 'fahrt' }]).total, 5.3, 'summe');
   console.log('Kassenbon-Test OK');
 }
+
+// ---- Einsatz über Mitternacht + Nacht-/Sonntagszuschlag ----
+{
+  const { dayRecord } = await import('../src/lib/calc.js');
+  const at = (day, t) => zurichToDate(day, t).toISOString();
+  // Mo 02.11.: 07:00–15:30, Pikett 22:00–01:00 (Di)
+  const e = [
+    { id: 1, kind: 'in', ts: at('2026-11-02', '07:00') }, { id: 2, kind: 'out', ts: at('2026-11-02', '15:30') },
+    { id: 3, kind: 'in', ts: at('2026-11-02', '22:00') }, { id: 4, kind: 'out', ts: at('2026-11-03', '01:00') },
+  ];
+  const by = groupByDay(e);
+  assert.equal(by.get('2026-11-02').length, 4, 'Ausstempeln 01:00 gehört zum Montag');
+  assert.equal(by.get('2026-11-03'), undefined);
+  const r = dayRecord('2026-11-02', by, new Map(), new Date('2026-11-05T12:00:00Z'));
+  assert.equal(r.total, 690);            // 8:30 + 3:00 (Lücke = Pause)
+  assert.equal(r.nightMin, 120);         // 23:00–01:00
+  assert.equal(r.bonus, 30);             // 2 h × 25 %
+  assert.ok(r.overnight);
+  // Sa 07.11. 22:00 – So 02:00: 22–23 Sa (+25 %), 23–02 Sonntag + Nacht (+75 %)
+  const e2 = [{ id: 1, kind: 'in', ts: at('2026-11-07', '22:00') }, { id: 2, kind: 'out', ts: at('2026-11-08', '02:00') }];
+  const r2 = dayRecord('2026-11-07', groupByDay(e2), new Map(), new Date('2026-11-10T12:00:00Z'));
+  assert.equal(r2.total, 240);      // 4 h, keine Mindestpause
+  assert.equal(r2.bonus, 60 * 0.25 + 180 * 0.75);   // 150 min
+  // laufender Einsatz nach Mitternacht zählt live zum Vortag
+  const e3 = [{ id: 1, kind: 'in', ts: at('2026-11-02', '22:00') }];
+  const s3 = dayStats(groupByDay(e3).get('2026-11-02'), false, zurichToDate('2026-11-03', '00:30'));
+  assert.ok(s3.open); assert.equal(s3.total, 150);
+  // vergessen auszustempeln (> 18 h) -> unvollständig, nächstes Einstempeln neuer Tag
+  const e4 = [{ id: 1, kind: 'in', ts: at('2026-11-02', '07:00') }, { id: 2, kind: 'in', ts: at('2026-11-03', '07:00') }];
+  const by4 = groupByDay(e4);
+  assert.equal(by4.get('2026-11-03').length, 1);
+  assert.ok(dayStats(by4.get('2026-11-02'), false, new Date('2026-11-03T12:00:00Z')).incomplete);
+  console.log('Nacht-/Mitternacht-Test OK');
+}
