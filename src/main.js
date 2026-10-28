@@ -152,12 +152,12 @@ async function loadReports() {
 }
 // PDF-Sprache = App-Sprache; auch für die automatischen Blätter (Server liest sie aus dem Benutzerprofil)
 const pdfLang = () => ({ lang: prefs.lang });
-function syncLang() {
+function syncLang(byUser = false) {
   if (S.user && S.user.user_metadata?.lang !== prefs.lang) {
     const changed = !!S.user.user_metadata?.lang;
     sb.auth.updateUser({ data: { lang: prefs.lang } }).then(({ data }) => { if (data?.user) S.user = data.user; }).catch(() => {});
-    // gespeicherte Spesenblätter in der neuen Sprache ablegen (für Archiv/automatische Läufe)
-    if (changed && S.expReports.length) refreshSheets(S.expReports.map((r) => `${r.month}-01`));
+    // nur wenn du die Sprache selbst umstellst: gespeicherte Spesenblätter still in der neuen Sprache ablegen
+    if (byUser && changed && S.expReports.length) refreshSheets(S.expReports.map((r) => `${r.month}-01`));
   }
 }
 
@@ -876,6 +876,7 @@ async function loadExpenses() {
 
 // Spesenblätter prüfen: stimmen Summe/Anzahl nicht (z. B. Änderung vor diesem Update), sofort neu erstellen
 let fixingSheets = false;
+const fixedSheets = new Set();   // pro Sitzung jeden Monat höchstens einmal neu erstellen
 const SHEET_LAYOUT = '2026-10-26T06:30:00Z';   // Blätter, die vorher erstellt wurden, bekommen das neue Layout
 async function fixStaleSheets() {
   if (fixingSheets || !S.user) return;
@@ -885,9 +886,10 @@ async function fixStaleSheets() {
     const rep = S.expReports.find((r) => r.month === ym);
     const items = S.expenses.filter((x) => x.day.startsWith(ym));
     if (!rep) return ym < cur && items.length > 0;
-    return Math.abs(Number(rep.total) - expenseTotals(items).total) > 0.004 || rep.count !== items.length
-      || rep.created_at < SHEET_LAYOUT;   // altes Layout (z. B. mit Unterschriften) -> neu erstellen
-  });
+    return Math.abs(Number(rep.total) - expenseTotals(items).total) > 0.004 || Number(rep.count) !== items.length
+      || new Date(rep.created_at) < new Date(SHEET_LAYOUT);   // altes Layout (z. B. mit Unterschriften) -> neu erstellen
+  }).filter((ym) => !fixedSheets.has(ym));
+  stale.forEach((ym) => fixedSheets.add(ym));
   if (!stale.length) return;
   fixingSheets = true;
   try { await refreshSheets(stale.map((ym) => `${ym}-01`)); } finally { fixingSheets = false; }
@@ -1165,8 +1167,7 @@ async function refreshSheets(days) {
         month: ym, total: expenseTotals(items).total, count: items.length, pdf_path: path, created_at: new Date().toISOString(),
       }, { onConflict: 'user_id,month' });
       if (error) throw error;
-      toast(T().expSheetUpdated(monthLabel(ym)));
-    } catch (e) { toast(T().error + (e.message || e), true); }
+    } catch (e) { console.warn('Spesenblatt', ym, e); }   // still: Downloads werden ohnehin frisch erstellt
   }
   await loadExpenses().catch(() => {});
 }
@@ -1435,7 +1436,7 @@ app.addEventListener('click', async (e) => {
   else if (a === 'push') togglePush();
   else if (a === 'bio') toggleBio();
   else if (a === 'unlock') unlock();
-  else if (a === 'pref') { setPref(el.dataset.k, el.dataset.v); if (el.dataset.k === 'lang') syncLang(); render(); }
+  else if (a === 'pref') { setPref(el.dataset.k, el.dataset.v); if (el.dataset.k === 'lang') syncLang(true); render(); }
   else if (a === 'logout') { S.locked = false; await sb.auth.signOut(); }
 });
 
