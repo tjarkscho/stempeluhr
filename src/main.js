@@ -349,7 +349,7 @@ function viewStamp() {
     <div class="sub">${L.workedToday}${t.label ? ` · ${esc(label(t.label))}` : ''}</div>
     <div class="facts">
       <div><span>${L.in}</span><b>${st.in ? hhmm(st.in) : '–'}</b></div>
-      <div><span>${L.pause}</span><b>${fmtMin(st.pause)}</b></div>
+      <div><span>${L.pause}</span><b>${fmtMin(st.state === 'break' ? st.stamped : st.pause)}</b></div>
       <div><span>${L.remaining}</span><b>${need != null ? fmtMin(need) : '–'}</b></div>
     </div>
   </section>
