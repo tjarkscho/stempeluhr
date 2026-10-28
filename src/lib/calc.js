@@ -111,8 +111,11 @@ export function dayStats(events, isToday, now = new Date()) {
 
   r.span = Math.max(0, Math.round((endT - r.in.getTime()) / 60000));
   r.stamped = Math.round(stampedMs / 60000);
-  // auch am laufenden Tag gleich die gesetzliche Mindestpause berücksichtigen (keine Sprünge beim Ausstempeln)
-  r.pause = effectiveBreak(r.span, r.stamped);
+  // laufender Einsatz: echte Zeit (Pause = gestempelt, Arbeitszeit steht in der Pause still);
+  // die gesetzliche Mindestpause wird erst beim Ausstempeln ergänzt
+  const legal = effectiveBreak(r.span, r.stamped);
+  r.pause = r.open ? r.stamped : legal;
+  r.pausePending = legal - r.pause;
   r.autoPause = r.pause > r.stamped;
   r.total = Math.max(0, r.span - r.pause);
   r.segs = segs;
