@@ -418,3 +418,19 @@ input.flash { animation: flash 1.2s ease-out; }
 .legal details p:last-child { margin-bottom: 14px; }
 .legal-links { display: grid; gap: 6px; margin-top: 6px; }
 .legal-links a { color: var(--accent); font-size: 14px; }
+/* Uhr in der App: klein im Kopf (Handy), gross links daneben (breiter Bildschirm) */
+header .hleft { display: flex; align-items: center; gap: 14px; }
+.hclock { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); }
+.dial-mini { width: 28px; }
+.dial-mini .tk { stroke-width: 0; }
+.dial-mini .tk-h { stroke-width: 10; }
+.dial-mini .d-track, .dial-mini .d-arc { stroke-width: 16; }
+.hclock .dial-time { font-size: 15px; font-weight: 500; letter-spacing: 0; }
+.sideclock { display: none; }
+@media (min-width: 1040px) {
+  .hclock { display: none; }
+  .sideclock { display: block; position: fixed; z-index: 1; top: 150px; left: calc((100vw - 560px) / 4 - 105px); width: 210px; pointer-events: none; }
+  .dial-side { width: 210px; }
+  .dial-side .dial-time { font-size: 44px; }
+  .dial-side .dial-date { font-size: 12px; }
+}
