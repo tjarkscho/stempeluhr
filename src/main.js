@@ -766,7 +766,7 @@ async function toggleAbsence(day) {
 }
 
 // ---------------- Login ----------------
-function loginDial() {
+function loginDial(v = '') {
   // Zifferblatt einer Stempeluhr: 60 Striche = Sekunden, Bogen läuft live mit, Mitte = Uhrzeit
   const now = new Date();
   const sec = now.getSeconds() + now.getMilliseconds() / 1000;
@@ -777,7 +777,11 @@ function loginDial() {
     const r1 = big ? 104 : 107, r2 = 112;
     ticks += `<line data-i="${i}" class="${big ? 'tk tk-h' : 'tk'} ${i <= Math.floor(sec) ? 'past' : ''}" x1="${(120 + r1 * Math.sin(a)).toFixed(1)}" y1="${(120 - r1 * Math.cos(a)).toFixed(1)}" x2="${(120 + r2 * Math.sin(a)).toFixed(1)}" y2="${(120 - r2 * Math.cos(a)).toFixed(1)}"/>`;
   }
-  return `<div class="dial" aria-hidden="true"><svg viewBox="0 0 240 240">${ticks}
+  if (v === 'mini') return `<span class="hclock" aria-hidden="true"><span class="dial dial-mini" data-v="mini"><svg viewBox="0 0 240 240">${ticks}
+    <circle class="d-track" cx="120" cy="120" r="${R}"/>
+    <circle class="d-arc" cx="120" cy="120" r="${R}" style="--c:${C.toFixed(1)};animation-delay:-${sec.toFixed(2)}s" transform="rotate(-90 120 120)"/>
+    <g class="d-dot" style="animation-delay:-${sec.toFixed(2)}s"><circle cx="120" cy="28" r="14"/></g></svg></span><span class="dial-time">${hhmm(now)}</span></span>`;
+  return `<div class="dial ${v ? `dial-${v}` : ''}" data-v="${v}" aria-hidden="true"><svg viewBox="0 0 240 240">${ticks}
     <circle class="d-track" cx="120" cy="120" r="${R}"/>
     <circle class="d-arc" cx="120" cy="120" r="${R}" style="--c:${C.toFixed(1)};animation-delay:-${sec.toFixed(2)}s" transform="rotate(-90 120 120)"/>
     <g class="d-dot" style="animation-delay:-${sec.toFixed(2)}s"><circle cx="120" cy="28" r="4.5"/></g></svg>
@@ -786,13 +790,15 @@ function loginDial() {
 }
 // Login-Uhr jede Sekunde nachführen, ohne die Eingaben anzufassen
 function tickDial() {
-  const d = app.querySelector('.dial');
-  if (!d) return;
   const now = new Date(), sec = now.getSeconds();
-  if (sec === 0) { d.outerHTML = loginDial(); return; }   // neue Minute: Bogen sauber neu starten
-  d.querySelectorAll('.tk').forEach((l) => l.classList.toggle('past', +l.dataset.i <= sec));
-  const t = d.querySelector('.dial-time');
-  if (t && t.textContent !== hhmm(now)) t.textContent = hhmm(now);
+  app.querySelectorAll('.dial').forEach((d) => {
+    const v = d.dataset.v || '';
+    const box = v === 'mini' ? d.closest('.hclock') : d;
+    if (sec === 0) { box.outerHTML = loginDial(v); return; }   // neue Minute: Bogen sauber neu starten
+    d.querySelectorAll('.tk').forEach((l) => l.classList.toggle('past', +l.dataset.i <= sec));
+    const t = box.querySelector('.dial-time');
+    if (t && t.textContent !== hhmm(now)) t.textContent = hhmm(now);
+  });
 }
 
 function viewLogin() {
@@ -1335,10 +1341,11 @@ function render() {
   // Fokus/Scroll im Editor erhalten
   const active = document.activeElement?.dataset?.ed ? { ed: document.activeElement.dataset.ed, i: document.activeElement.dataset.i } : null;
   app.innerHTML = `
-  <header><img class="hlogo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" /><div>
+  <header><div class="hleft"><img class="hlogo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" />${loginDial('mini')}</div><div>
     <button class="icon" data-act="drawer" title="${L.calendar}" aria-label="${L.calendar}">${ICON.cal}</button>
     <button class="icon" data-act="settings" title="${L.settings}" aria-label="${L.settings}">${ICON.gear}</button>
     <button class="icon" data-act="logout" title="${L.logout}" aria-label="${L.logout}">${ICON.out}</button></div></header>
+  <aside class="sideclock">${loginDial('side')}</aside>
   <main><div class="pager">${VIEWS.map((v) => `<section class="page ${v === S.view ? 'active' : ''}"><div class="page-in">${viewOf(v)}</div></section>`).join('')}</div></main>
   <nav><div class="tabbar"><span class="ind"></span>${tab('stamp', L.tabStamp)}${tab('week', L.tabWeek)}${tab('expenses', L.tabExp)}${tab('archive', L.tabArchive)}</div></nav>
   ${S.editor ? viewEditor() : ''}
@@ -1435,7 +1442,7 @@ app.addEventListener('click', async (e) => {
 
 // Uhr aktualisieren
 // Login-Zifferblatt jede Minute nachführen (ohne die Eingaben zu verlieren)
-setInterval(() => { if (!S.user || S.locked) tickDial(); }, 1000);
+setInterval(tickDial, 1000);   // Login-Uhr und Uhr in der App
 setInterval(() => { if (S.user && !S.locked && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !S.exp && !slide) render(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && S.user) countUpNext = true;
