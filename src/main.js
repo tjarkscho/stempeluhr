@@ -403,7 +403,7 @@ function viewWeek() {
   </section>
   <div class="stats">
     <div><span>${L.targetWeek}</span><b>${fmtMin(w.soll)}</b></div>
-    <div><span>${L.actualWeek}</span><b>${fmtMin(w.ist)}</b>${w.bonus ? `<small class="sub2">${L.bonus} ${fmtMin(w.bonus)}</small>` : ''}</div>
+    <div><span>${L.actualWeek}</span><b>${fmtMin(w.ist + w.days.reduce((a, d) => a + (d.open && d.counted ? d.dayTotal : 0), 0))}</b>${w.bonus ? `<small class="sub2">${L.bonus} ${fmtMin(w.bonus)}</small>` : ''}</div>
     <div><span>${L.diffWeek}</span><b class="${dw < 0 ? 'neg' : 'pos'}">${fmtMin(dw, true)}</b>${isCurrent ? `<small class="sub2">${L.untilToday}</small>` : ''}</div>
     <div><span>${L.balanceTotal}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b><small class="sub2">${L.since(fmtDate(CONFIG.startDate))}</small></div>
   </div>
