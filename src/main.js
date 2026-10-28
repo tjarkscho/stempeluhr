@@ -323,9 +323,9 @@ function viewStamp() {
   let endTxt = '';
   if (st.state !== 'off') {
     const target = Math.max(0, t.soll - t.credit);
-    if (target && need === 0) endTxt = L.sollReached;
+    const extra = Math.max(0, lawBreak(target) - st.pause);   // noch fehlende gesetzliche Pause
+    if (target && need === 0 && (st.state === 'break' || extra === 0)) endTxt = L.sollReached;
     else if (target) {
-      const extra = Math.max(0, lawBreak(target) - st.pause);
       endTxt = st.state === 'break' ? L.endAfterBreak(fmtMin(need)) : L.endAt(hhmm(new Date(now.getTime() + (need + extra) * 60000)));
     }
   } else if (st.in) endTxt = L.niceEvening;
@@ -349,7 +349,7 @@ function viewStamp() {
     <div class="sub">${L.workedToday}${t.label ? ` · ${esc(label(t.label))}` : ''}</div>
     <div class="facts">
       <div><span>${L.in}</span><b>${st.in ? hhmm(st.in) : '–'}</b></div>
-      <div><span>${L.pause}</span><b>${fmtMin(st.state === 'break' ? st.stamped : st.pause)}</b></div>
+      <div><span>${L.pause}</span><b>${fmtMin(st.pause)}</b></div>
       <div><span>${L.remaining}</span><b>${need != null ? fmtMin(need) : '–'}</b></div>
     </div>
   </section>
