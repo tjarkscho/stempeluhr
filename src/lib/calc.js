@@ -231,7 +231,8 @@ export function weekStats(monday, byDay, absences, now = new Date(), sollUntil =
     const r = dayRecord(day, byDay, absences, now);
     const total = r.counted ? r.dayTotal : 0;
     days.push(r);
-    if (!r.open) { soll += r.soll; ist += total; }   // laufender Einsatz wird von der App live dazugerechnet
+    soll += r.soll;
+    if (!r.open) ist += total;   // laufender Einsatz wird von der App live dazugerechnet
     // "Stand heute": vergangene Tage + heute, sobald ausgestempelt oder abwesend (laufender Einsatz zählt live separat)
     const counts = !sollUntil || (day < sollUntil && !r.open) ||
       (day === sollUntil && (r.credit > 0 || (r.in && !r.open)));
