@@ -444,7 +444,7 @@ function ring(worked, target, L, running = false) {
     <svg viewBox="0 0 200 200"><g transform="rotate(-90 100 100)">
       <circle class="r-track" cx="100" cy="100" r="${R}"/>
       ${arc(base, 'r-base')}${arc(over, 'r-over')}
-    </g>${running ? (() => { const n = new Date(); return `<g class="sec" style="animation-delay:-${(n.getSeconds() + n.getMilliseconds() / 1000).toFixed(2)}s"><circle cx="100" cy="16" r="5"/></g>`; })() : ''}</svg>
+    </g></svg>
     <div class="ring-in"><div class="clock" data-count="${worked}">${fmtMin(worked)}</div><div class="ring-sub">${sub}</div></div>
   </div>`;
 }
@@ -1345,7 +1345,6 @@ function render() {
     <button class="icon" data-act="drawer" title="${L.calendar}" aria-label="${L.calendar}">${ICON.cal}</button>
     <button class="icon" data-act="settings" title="${L.settings}" aria-label="${L.settings}">${ICON.gear}</button>
     <button class="icon" data-act="logout" title="${L.logout}" aria-label="${L.logout}">${ICON.out}</button></div></header>
-  <aside class="sideclock">${loginDial('side')}</aside>
   <main><div class="pager">${VIEWS.map((v) => `<section class="page ${v === S.view ? 'active' : ''}"><div class="page-in">${viewOf(v)}</div></section>`).join('')}</div></main>
   <nav><div class="tabbar"><span class="ind"></span>${tab('stamp', L.tabStamp)}${tab('week', L.tabWeek)}${tab('expenses', L.tabExp)}${tab('archive', L.tabArchive)}</div></nav>
   ${S.editor ? viewEditor() : ''}
