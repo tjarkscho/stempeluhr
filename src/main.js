@@ -8,6 +8,7 @@ import {
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
 import { legalText } from './lib/legal.js';
+import { fmtChf as chfOf, vacationAccount, upcomingHolidays, forecastMonthEnd, workStats, timeOfDay } from './lib/extras.js';
 import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, PHOTO_CATS, kmAmount, lastWorkday, cleanRoute } from './lib/receipt.js';
 import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt, dayRecord, lawBreak } from './lib/calc.js';
 
@@ -173,7 +174,37 @@ async function loadAll() {
   catch (e) { if (!isNetErr(e)) toast(T().loadFailed + e.message, true); }
   if (!hadCache) countUpNext = true;
   render();
+  checkHash();
 }
+
+// Link aus dem iPhone-Kurzbefehl (#ein / #aus): nachfragen statt blind stempeln
+function checkHash() {
+  const h = location.hash.replace('#', '');
+  if (h !== 'ein' && h !== 'aus') return;
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!S.user) return;
+  const st = todayInfo().st.state;
+  if (h === 'ein' && st === 'off') S.prompt = 'in';
+  else if (h === 'aus' && st !== 'off') S.prompt = 'out';
+  else return;
+  enterAnim = 'sheet'; render();
+}
+window.addEventListener('hashchange', checkHash);
+
+function viewPrompt() {
+  const L = T(), inn = S.prompt === 'in';
+  return `<div class="modal" data-act="promptclose"><div class="sheet prompt" data-stop="1">
+    <div class="prompt-ic">${inn ? '📍' : '🚗'}</div>
+    <h3>${inn ? L.arrive : L.leave}</h3><p>${inn ? L.arriveText : L.leaveText}</p>
+    <button class="big ${inn ? 'go' : 'stop'}" data-act="stampnow">${inn ? L.clockIn : L.clockOut}</button>
+    <button class="link" data-act="promptclose">${L.notNow}</button>
+  </div></div>`;
+}
+
+// Saldo-Wert in Stunden oder Franken (Einstellung)
+const inChf = () => prefs.money === 'chf';
+const balTxt = (m) => (inChf() ? chfOf(m) : fmtMin(m, true));
+const balB = (m, extra = '') => `<b class="${m < 0 ? 'neg' : m > 0 ? 'pos' : ''}" data-count="${m}" data-signed="1" ${inChf() ? 'data-chf="1"' : ''}${extra}>${balTxt(m)}</b>`;
 
 // ---------------- Stempeln ----------------
 // Arbeitstag, zu dem der aktuelle Einsatz gehört (nach Mitternacht noch der Vortag, solange eingestempelt)
@@ -225,12 +256,45 @@ function confirmStamp(kind, ts, offline) {
   setTimeout(() => el.remove(), 1650);
 }
 
+// Feierabend-Moment: Ring füllt sich, Tagesbilanz, kurz halten (Tippen schliesst)
+function feierabend(fb, ts) {
+  const L = T();
+  document.querySelector('.confirm')?.remove();
+  const el = document.createElement('div');
+  el.className = 'confirm fb';
+  const pos = fb.diff >= 0;
+  el.style.setProperty('--cc', pos ? 'var(--go)' : 'var(--accent)');
+  const icon = +hhmm(ts).slice(0, 2) >= 17 ? '🌇' : '👋';
+  el.innerHTML = `<div class="confirm-box fb-box">
+    <svg viewBox="0 0 64 64" width="96" height="96"><circle class="cc-ring" cx="32" cy="32" r="28"/><text x="32" y="41" text-anchor="middle" font-size="26">${icon}</text></svg>
+    <b>${L.feierabend}</b>
+    <div class="fb-num">${fmtMin(fb.total)}<small>${L.fbToday}</small></div>
+    <div class="fb-row"><span class="fb-chip ${pos ? 'pos' : 'neg'}">${balTxt(fb.diff)}</span><span class="fb-sal">${L.fbSaldo} ${balTxt(fb.saldo)}</span></div>
+    <span>${L.at(hhmm(ts))}</span></div>`;
+  document.body.appendChild(el);
+  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); };
+  el.addEventListener('click', close);
+  el.style.pointerEvents = 'auto';
+  setTimeout(close, 3200);
+}
+
 async function stamp(kinds) {
   if (S.busy) return;
   haptic();
   S.busy = true; render();
   const ts = new Date();
   const rows = kinds.map((kind, i) => ({ kind, ts: new Date(ts.getTime() + i * 1000).toISOString() }));
+  // Feierabend: Tagesbilanz schon vor dem Speichern ausrechnen (wie nach dem Ausstempeln)
+  let fb = null;
+  if (kinds.includes('out')) {
+    try {
+      const day = shiftDay(ts), t = dayTargets(day, S.absences);
+      const evs = [...(S.byDay.get(day) || []), ...rows.map((x) => ({ ...x }))];
+      const stx = dayStats(evs, false, ts);
+      const diff = stx.total + t.credit - t.soll;
+      fb = { total: stx.total, diff, saldo: saldoThrough(mondayOf(dayKey(ts)), S.byDay, S.absences, ts) + diff };
+    } catch { fb = null; }
+  }
   let error = null;
   if (navigator.onLine && !queue().length) {
     try { ({ error } = await sb.from('entries').insert(rows)); } catch (e) { error = e; }
@@ -243,9 +307,9 @@ async function stamp(kinds) {
     lsSet(QKEY, [...queue(), ...rows]);
     setEntries(S.entries.filter((e) => !e.pending));
     render();
-    return confirmStamp(lastKind, ts, true);
+    return fb ? feierabend(fb, ts) : confirmStamp(lastKind, ts, true);
   }
-  confirmStamp(lastKind, ts, false);
+  if (fb) feierabend(fb, ts); else confirmStamp(lastKind, ts, false);
   await loadEntries().catch(() => {});
   render();
 }
@@ -316,7 +380,7 @@ function viewStamp() {
   const weekDiff = wk.diffToDate + live;
   const saldo = saldoThrough(mondayOf(today), S.byDay, S.absences, now) + live;
   const need = st.state !== 'off' ? Math.max(0, (t.soll - t.credit) - st.total) : null;
-  const sg = (m) => `<b class="${m < 0 ? 'neg' : m > 0 ? 'pos' : ''}" data-count="${m}" data-signed="1">${fmtMin(m, true)}</b>`;
+  const sg = (m) => balB(m);
   // Begrüssung + voraussichtlicher Feierabend (inkl. noch fehlender gesetzlicher Pause)
   const hr = +hhmm(now).slice(0, 2);
   const name = CONFIG.employee.split(' ')[0];
@@ -360,7 +424,19 @@ function viewStamp() {
   </div>
   <div class="buttons">${buttons}</div>
   <p class="hint">${L.breakHint}</p>
-  <button class="link" data-act="edit" data-day="${today}">${L.correctToday}</button>`;
+  <button class="link" data-act="edit" data-day="${today}">${L.correctToday}</button>
+  ${outlook(L, today, live, now)}`;
+}
+
+// Ausblick: Prognose Monatsende + nächster Feiertag / Brückentag
+function outlook(L, today, live, now) {
+  const fc = forecastMonthEnd(S.byDay, S.absences, now, live);
+  const hol = upcomingHolidays(today, 1)[0];
+  const wdName = (d) => L.daysShort[weekday(d)];
+  return `<section class="card outlook">
+    ${fc ? `<div class="ol-row"><span class="ol-ic">📈</span><div><span>${L.forecast} (${fmtDate(fc.monthEnd).slice(0, 5)})</span><small>${L.forecastSub(balTxt(Math.round(fc.avg)))}</small></div>${balB(fc.value)}</div>` : ''}
+    ${hol ? `<div class="ol-row"><span class="ol-ic">📅</span><div><span>${L.nextHol}</span><small>${esc(label(hol.name))} · ${wdName(hol.day)} ${fmtDate(hol.day).slice(0, 5)}${hol.bridge ? ` · ${L.bridge(`${wdName(hol.bridge)} ${fmtDate(hol.bridge).slice(0, 5)}`)}` : ''}</small></div><b>${L.inDays(hol.inDays)}</b></div>` : ''}
+  </section>`;
 }
 
 // ---------------- Woche ----------------
@@ -404,8 +480,8 @@ function viewWeek() {
   <div class="stats">
     <div><span>${L.targetWeek}</span><b>${fmtMin(w.soll)}</b></div>
     <div><span>${L.actualWeek}</span><b>${fmtMin(w.ist + w.days.reduce((a, d) => a + (d.open && d.counted ? d.dayTotal : 0), 0))}</b>${w.bonus ? `<small class="sub2">${L.bonus} ${fmtMin(w.bonus)}</small>` : ''}</div>
-    <div><span>${L.diffWeek}</span><b class="${dw < 0 ? 'neg' : 'pos'}">${fmtMin(dw, true)}</b>${isCurrent ? `<small class="sub2">${L.untilToday}</small>` : ''}</div>
-    <div><span>${L.balanceTotal}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b><small class="sub2">${L.since(fmtDate(CONFIG.startDate))}</small></div>
+    <div><span>${L.diffWeek}</span>${balB(dw)}${isCurrent ? `<small class="sub2">${L.untilToday}</small>` : ''}</div>
+    <div><span>${L.balanceTotal}</span>${balB(saldo)}<small class="sub2">${L.since(fmtDate(CONFIG.startDate))}</small></div>
   </div>
   ${saldoChart(L, now)}
   <p class="hint">${L.weekHint}</p>
@@ -418,8 +494,9 @@ function viewWeek() {
 function viewArchive() {
   const L = T();
   const tab = (v, l) => `<button type="button" class="${S.archTab === v ? 'on' : ''}" data-act="arch" data-v="${v}">${l}</button>`;
-  const tabs = `<div class="seg seg3" data-seg="arch"><span class="ind"></span>${tab('weeks', L.archWeeks)}${tab('months', L.archMonths)}${tab('years', L.archYears)}</div>`;
+  const tabs = `<div class="seg seg4" data-seg="arch"><span class="ind"></span>${tab('weeks', L.archWeeks)}${tab('months', L.archMonths)}${tab('years', L.archYears)}${tab('stats', L.archStats)}</div>`;
   if (S.archTab === 'months' || S.archTab === 'years') return tabs + viewPeriods(L);
+  if (S.archTab === 'stats') return tabs + viewStats(L);
   if (!S.reports.length) return tabs + `<section class="card"><p>${L.archiveEmpty}</p></section>`;
   return tabs + `<section class="card pad0"><ul class="list">${S.reports.map((r) => `
     <li data-act="sheet" data-kind="week" data-key="${r.week_start}">
@@ -427,6 +504,26 @@ function viewArchive() {
       <div class="r"><span class="${r.diff < 0 ? 'neg' : 'pos'}">${fmtMin(r.diff, true)}</span><small>${L.balance} ${fmtMin(r.saldo, true)}</small></div>
       <span class="dl">${ICON.download}</span>
     </li>`).join('')}</ul></section>`;
+}
+
+// Statistik
+function viewStats(L) {
+  const st = workStats(S.byDay, S.absences);
+  if (!st) return `<section class="card"><p>${L.stNone}</p></section>`;
+  const tm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const saldo = saldoAt(dayKey(new Date()), S.byDay, S.absences);
+  const tile = (ic, k, v, sub = '') => `<div><span>${ic} ${k}</span><b>${v}</b>${sub ? `<small class="sub2">${sub}</small>` : ''}</div>`;
+  return `<div class="stats stats-x">
+    ${tile('🌅', L.stEarliest, st.earliest.time, fmtDate(st.earliest.day))}
+    ${st.latest ? tile('🌙', L.stLatest, st.latest.time, fmtDate(st.latest.day)) : ''}
+    ${tile('⏱️', L.stLongest, fmtMin(st.longest.min), fmtDate(st.longest.day))}
+    ${tile('🔥', L.stStreak, st.streak, L.stStreakSub(st.streak))}
+    ${tile('📊', L.stAvgWork, fmtMin(st.avgWork), L.stDays(st.count))}
+    ${tile('☕', L.stAvgPause, fmtMin(st.avgPause))}
+    ${tile('🚪', L.stAvgIn, tm(st.avgIn))}
+    ${st.avgOut != null ? tile('🏁', L.stAvgOut, tm(st.avgOut)) : ''}
+  </div>
+  <div class="stats stats-x one">${tile('💰', L.stChf, `<span class="${saldo < 0 ? 'neg' : 'pos'}">${chfOf(saldo)}</span>`, `${fmtMin(saldo, true)} · ${L.stChfSub(CONFIG.hourlyRate.toFixed(2))}`)}</div>`;
 }
 
 // ---------------- Ring ----------------
@@ -749,8 +846,22 @@ function viewDrawer() {
     <div class="legend"><span><i class="a-ferien">${L.absShort.ferien}</i> ${L.absF}</span><span><i class="a-ferien_halb">½</i> ${L.absH}</span><span><i class="a-krank">${L.absShort.krank}</i> ${L.absK}</span><span><i class="hol">${L.absShort.hol}</i> ${L.absFT}</span></div>
     <div class="heat-legend"><span>${L.heatLow}</span><i></i><span>${L.heatHigh}</span></div>
     <p class="hint">${L.absHint}</p>
-    <p class="hint"><b>${L.vacDays(y, yearCount)}</b></p>
+    ${vacBlock(L, y)}
   </aside>`;
+}
+
+function vacBlock(L, y) {
+  const v = vacationAccount(y, S.absences);
+  const n = (x) => String(x).replace('.', ',');
+  const cell = (k, x, cls = '') => `<div class="${cls}"><span>${k}</span><b>${n(x)}</b></div>`;
+  const [sy] = CONFIG.employmentStart.split('-').map(Number);
+  return `<div class="vac">
+    <div class="vac-head"><b>${L.vacAcc} ${y}</b></div>
+    <div class="vac-grid">${cell(L.vacEnt, v.entitlement)}${cell(L.vacTaken, v.taken)}${cell(L.vacPlanned, v.planned)}${cell(L.vacLeft, v.left, v.left < 0 ? 'neg' : 'pos')}</div>
+    <i class="vac-bar"><span style="width:${Math.min(100, v.entitlement ? (v.used / v.entitlement) * 100 : 0)}%"></span></i>
+    ${y === sy ? `<p class="hint">${L.vacProRata(y)}</p>` : ''}
+    ${v.closure ? `<p class="hint">🎄 ${L.vacClosure(v.closure)}</p>` : ''}
+  </div>`;
 }
 
 async function toggleAbsence(day) {
@@ -790,6 +901,8 @@ function loginDial(v = '') {
 }
 // Login-Uhr jede Sekunde nachführen, ohne die Eingaben anzufassen
 function tickDial() {
+  const tod = timeOfDay();
+  if (document.documentElement.dataset.tod !== tod) document.documentElement.dataset.tod = tod;
   const now = new Date(), sec = now.getSeconds();
   app.querySelectorAll('.dial').forEach((d) => {
     const v = d.dataset.v || '';
@@ -825,6 +938,8 @@ function prefsControls() {
   return `<div class="prefs">
     <span class="plabel">${L.language}</span>
     ${seg('lang', ['de', 'fr'], (v) => v.toUpperCase())}
+    ${S.user ? `<span class="plabel">${L.money}</span>
+    ${seg('money', ['time', 'chf'], (v) => (v === 'chf' ? `${L.moneyChf} (${CONFIG.hourlyRate.toFixed(2)})` : L.moneyTime))}` : ''}
     ${S.user ? `<span class="plabel">${L.reminder}</span>
     <button type="button" class="toggle ${S.pushOn ? 'on' : ''}" data-act="push" ${S.busy ? 'disabled' : ''}>
       <span>${L.reminderText}</span><i></i></button>
@@ -845,9 +960,20 @@ function viewSettings() {
     <span class="plabel">${G.sources}</span>
     <div class="legal-links">${G.links.map(([t, u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(t)}</a>`).join('')}</div>
   </div></div>`;
+  if (S.settings === 'auto') {
+    const L = T(), base = location.origin + location.pathname;
+    const link = (k, u) => `<div class="autolink"><span>${k}</span><code>${esc(u)}</code><button type="button" class="btn ghost" data-act="copylink" data-url="${esc(u)}">⧉</button></div>`;
+    return `<div class="modal" data-act="setclose"><div class="sheet legal" data-stop="1">
+    <div class="sheethead"><button class="icon" data-act="legalback" aria-label="${prefs.lang === 'fr' ? 'Retour' : 'Zurück'}">${ICON.prev}</button><b>${L.autoTitle}</b><button class="icon" data-act="setclose">${ICON.close}</button></div>
+    <ol class="steps">${L.autoSteps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+    ${link(L.autoIn, base + '#ein')}${link(L.autoOut, base + '#aus')}
+  </div></div>`;
+  }
   return `<div class="modal" data-act="setclose"><div class="sheet" data-stop="1">
     <div class="sheethead"><b>${T().settings}</b><button class="icon" data-act="setclose">${ICON.close}</button></div>
     ${prefsControls()}
+    <div class="prefs"><span class="plabel">${T().autoTitle}</span>
+    <button type="button" class="toggle navrow" data-act="auto"><span>${T().autoRow}</span>${ICON.next}</button></div>
     <div class="prefs"><span class="plabel">${G.title}</span>
     <button type="button" class="toggle navrow" data-act="legal"><span>${G.rowText}</span>${ICON.next}</button></div>
   </div></div>`;
@@ -1264,7 +1390,7 @@ function animateAfterRender() {
 // Wischen zwischen den Tabs (folgt dem Finger)
 let touch = null;
 app.addEventListener('touchstart', (e) => {
-  if (!S.user || S.editor || S.drawer || S.settings || !e.target.closest('main') || e.target.closest('input,select,textarea,.c-hit,.slider')) return;
+  if (!S.user || S.editor || S.drawer || S.settings || S.prompt || !e.target.closest('main') || e.target.closest('input,select,textarea,.c-hit,.slider')) return;
   const t = e.touches[0];
   touch = { x: t.clientX, y: t.clientY, t: performance.now(), dir: null, dx: 0 };
 }, { passive: true });
@@ -1334,7 +1460,7 @@ function countUp() {
     for (const el of els) {
       if (!el.isConnected) continue;
       const v = +el.dataset.count;
-      el.textContent = fmtMin(Math.round(v * e), !!el.dataset.signed);
+      el.textContent = el.dataset.chf ? chfOf(Math.round(v * e)) : fmtMin(Math.round(v * e), !!el.dataset.signed);
     }
     if (k < 1 && els.some((el) => el.isConnected)) requestAnimationFrame(step);
   };
@@ -1365,6 +1491,7 @@ function render() {
   ${S.editor ? viewEditor() : ''}
   ${S.drawer ? viewDrawer() : ''}
   ${S.settings ? viewSettings() : ''}
+  ${S.prompt ? viewPrompt() : ''}
   ${S.exp ? viewExpSheet() : ''}
   ${S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : ''}`;
   if (enterAnim) { app.querySelectorAll(enterAnim === 'drawer' ? '.drawer, .drawer-bg' : '.sheet, .modal').forEach((e) => e.classList.add('enter')); enterAnim = null; }
@@ -1440,6 +1567,10 @@ app.addEventListener('click', async (e) => {
   else if (a === 'expkm') { S.exp = { kind: 'km', day: dayKey(new Date()), km: '', ret: false, route: '', note: '', touched: {} }; enterAnim = 'sheet'; render(); app.querySelector('[data-exp=route]')?.focus(); }
   else if (a === 'expret') { S.exp.ret = !S.exp.ret; el.classList.toggle('on', S.exp.ret); refreshKm(); }
   else if (a === 'arch') { S.archTab = el.dataset.v; render(); }
+  else if (a === 'stampnow') { const k = S.prompt; S.prompt = null; if (k === 'in') stamp(['in']); else stamp(todayInfo().st.state === 'break' ? ['break_end', 'out'] : ['out']); }
+  else if (a === 'promptclose') { S.prompt = null; render(); }
+  else if (a === 'auto') { S.settings = 'auto'; render(); }
+  else if (a === 'copylink') { navigator.clipboard?.writeText(el.dataset.url).then(() => toast(T().copied)).catch(() => {}); }
   else if (a === 'rep') periodPdf(el.dataset.k);
   else if (a === 'pt') { S.chartSel = +el.dataset.i; render(); }
   else if (a === 'settings') { S.settings = true; enterAnim = 'sheet'; render(); }
@@ -1457,7 +1588,7 @@ app.addEventListener('click', async (e) => {
 // Uhr aktualisieren
 // Login-Zifferblatt jede Minute nachführen (ohne die Eingaben zu verlieren)
 setInterval(tickDial, 1000);   // Login-Uhr und Uhr in der App
-setInterval(() => { if (S.user && !S.locked && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !S.exp && !slide) render(); }, 30000);
+setInterval(() => { if (S.user && !S.locked && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !S.prompt && !S.exp && !slide) render(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && S.user) countUpNext = true;
   if (!document.hidden && S.user) flushQueue().then(() => loadEntries()).then(render).catch(() => render());
