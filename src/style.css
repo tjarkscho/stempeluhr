@@ -635,3 +635,10 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
   radial-gradient(55% 40% at 100% 0%, rgba(40,70,170,.42), transparent 72%),
   radial-gradient(70% 45% at 0% 100%, rgba(20,30,110,.5), transparent 72%), var(--bg); }
 .balance b[data-chf] { font-size: 16px; white-space: nowrap; letter-spacing: -.01em; }
+.sym { display: inline-block; vertical-align: -3px; color: var(--muted); flex: none; }
+.stats-x span .sym { margin-right: 4px; }
+.ol-ic { display: grid; place-items: center; color: var(--muted); }
+.ol-ic .sym { color: var(--muted); }
+.prompt-ic { color: var(--accent); }
+.prompt-ic .sym { color: var(--accent); vertical-align: middle; }
+.stats-x b span { font-size: inherit; display: inline; }
