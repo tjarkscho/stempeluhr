@@ -1,5 +1,5 @@
 // Service Worker: Offline-Betrieb + Push-Benachrichtigungen
-const CACHE = 'stempeluhr-v1';
+const CACHE = 'stempeluhr-v2';   // neue Version -> alter Cache (inkl. alter Icons) wird gelöscht
 const SHELL = ['./', './manifest.webmanifest', './logo.png'];
 
 self.addEventListener('install', (e) => {
@@ -29,7 +29,16 @@ self.addEventListener('fetch', (e) => {
     );
     return;
   }
-  // Dateien (JS/CSS/Bilder, mit Hash im Namen): Cache zuerst
+  // Dateien ohne Hash im Namen (Icons, Manifest, Logo): zuerst Netz, damit Änderungen ankommen
+  if (!url.pathname.includes('/assets/')) {
+    e.respondWith(
+      fetch(req)
+        .then((res) => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); } return res; })
+        .catch(() => caches.match(req)),
+    );
+    return;
+  }
+  // Dateien mit Hash im Namen (JS/CSS aus dem Build): Cache zuerst
   e.respondWith(
     caches.match(req).then((hit) => hit || fetch(req).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
