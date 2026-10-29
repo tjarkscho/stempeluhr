@@ -185,7 +185,7 @@ const browserFr = typeof navigator !== 'undefined' && /^fr/i.test(navigator.lang
 
 export const prefs = {
   lang: saved.lang === 'fr' || saved.lang === 'de' ? saved.lang : (browserFr ? 'fr' : 'de'),
-  theme: THEMES.includes(saved.theme) ? saved.theme : 'auto', // Standard: wie das Gerät
+  theme: 'glas', // immer Glas, hell/dunkel automatisch wie das Gerät
 };
 
 // Gerät wechselt hell/dunkel -> sofort übernehmen
