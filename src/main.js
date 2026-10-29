@@ -67,6 +67,26 @@ const S = {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // Minimalistische Linien-Icons
+// feine Linien-Symbole für Statistik, Ausblick usw. (statt Emojis)
+const SYM = (d, size = 16) => `<svg class="sym" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const SY = {
+  sunrise: '<path d="M4 18h16M7 14a5 5 0 0 1 10 0M12 4v3M5.6 7.6l1.5 1.5M18.4 7.6l-1.5 1.5M3 14h1.5M19.5 14H21"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2h5"/>',
+  streak: '<path d="M4 17l5-5 4 4 7-8"/><path d="M15 8h5v5"/>',
+  avg: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  cup: '<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16M8 3v3M12 3v3"/>',
+  enter: '<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M4 12h11M11 8l4 4-4 4"/>',
+  leave: '<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M20 12H9M16 8l4 4-4 4"/>',
+  coin: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.4 0-2.5.8-2.5 2s1.1 1.6 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2c-1 0-2-.5-2.5-1.5M12 6.5v1.5M12 16v1.5"/>',
+  trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  cal: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  car: '<path d="M5 16V11l2-5h10l2 5v5M3 16h18v3h-3M6 19H3M7.5 13.5h.01M16.5 13.5h.01M5 11h14"/>',
+  snow: '<path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+};
+
 const ICON = {
   cal: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
   gear: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
@@ -194,7 +214,7 @@ window.addEventListener('hashchange', checkHash);
 function viewPrompt() {
   const L = T(), inn = S.prompt === 'in';
   return `<div class="modal" data-act="promptclose"><div class="sheet prompt" data-stop="1">
-    <div class="prompt-ic">${inn ? '📍' : '🚗'}</div>
+    <div class="prompt-ic">${SYM(inn ? SY.pin : SY.car, 40)}</div>
     <h3>${inn ? L.arrive : L.leave}</h3><p>${inn ? L.arriveText : L.leaveText}</p>
     <button class="big ${inn ? 'go' : 'stop'}" data-act="stampnow">${inn ? L.clockIn : L.clockOut}</button>
     <button class="link" data-act="promptclose">${L.notNow}</button>
@@ -264,9 +284,9 @@ function feierabend(fb, ts) {
   el.className = 'confirm fb';
   const pos = fb.diff >= 0;
   el.style.setProperty('--cc', pos ? 'var(--go)' : 'var(--accent)');
-  const icon = +hhmm(ts).slice(0, 2) >= 17 ? '🌇' : '👋';
+  const icon = SY.check;
   el.innerHTML = `<div class="confirm-box fb-box">
-    <svg viewBox="0 0 64 64" width="96" height="96"><circle class="cc-ring" cx="32" cy="32" r="28"/><text x="32" y="41" text-anchor="middle" font-size="26">${icon}</text></svg>
+    <svg viewBox="0 0 64 64" width="96" height="96"><circle class="cc-ring" cx="32" cy="32" r="28"/><g transform="translate(18 18) scale(1.17)" fill="none" stroke="var(--cc)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${icon}</g></svg>
     <b>${L.feierabend}</b>
     <div class="fb-num">${fmtMin(fb.total)}<small>${L.fbToday}</small></div>
     <div class="fb-row"><span class="fb-chip ${pos ? 'pos' : 'neg'}">${balTxt(fb.diff)}</span><span class="fb-sal">${L.fbSaldo} ${balTxt(fb.saldo)}</span></div>
@@ -434,8 +454,8 @@ function outlook(L, today, live, now) {
   const hol = upcomingHolidays(today, 1)[0];
   const wdName = (d) => L.daysShort[weekday(d)];
   return `<section class="card outlook">
-    ${fc ? `<div class="ol-row"><span class="ol-ic">📈</span><div><span>${L.forecast} (${fmtDate(fc.monthEnd).slice(0, 5)})</span><small>${L.forecastSub(balTxt(Math.round(fc.avg)))}</small></div>${balB(fc.value)}</div>` : ''}
-    ${hol ? `<div class="ol-row"><span class="ol-ic">📅</span><div><span>${L.nextHol}</span><small>${esc(label(hol.name))} · ${wdName(hol.day)} ${fmtDate(hol.day).slice(0, 5)}${hol.bridge ? ` · ${L.bridge(`${wdName(hol.bridge)} ${fmtDate(hol.bridge).slice(0, 5)}`)}` : ''}</small></div><b>${L.inDays(hol.inDays)}</b></div>` : ''}
+    ${fc ? `<div class="ol-row"><span class="ol-ic">${SYM(SY.trend, 20)}</span><div><span>${L.forecast} (${fmtDate(fc.monthEnd).slice(0, 5)})</span><small>${L.forecastSub(balTxt(Math.round(fc.avg)))}</small></div>${balB(fc.value)}</div>` : ''}
+    ${hol ? `<div class="ol-row"><span class="ol-ic">${SYM(SY.cal, 20)}</span><div><span>${L.nextHol}</span><small>${esc(label(hol.name))} · ${wdName(hol.day)} ${fmtDate(hol.day).slice(0, 5)}${hol.bridge ? ` · ${L.bridge(`${wdName(hol.bridge)} ${fmtDate(hol.bridge).slice(0, 5)}`)}` : ''}</small></div><b>${L.inDays(hol.inDays)}</b></div>` : ''}
   </section>`;
 }
 
@@ -514,16 +534,16 @@ function viewStats(L) {
   const saldo = saldoAt(dayKey(new Date()), S.byDay, S.absences);
   const tile = (ic, k, v, sub = '') => `<div><span>${ic} ${k}</span><b>${v}</b>${sub ? `<small class="sub2">${sub}</small>` : ''}</div>`;
   return `<div class="stats stats-x">
-    ${tile('🌅', L.stEarliest, st.earliest.time, fmtDate(st.earliest.day))}
-    ${st.latest ? tile('🌙', L.stLatest, st.latest.time, fmtDate(st.latest.day)) : ''}
-    ${tile('⏱️', L.stLongest, fmtMin(st.longest.min), fmtDate(st.longest.day))}
-    ${tile('🔥', L.stStreak, st.streak, L.stStreakSub(st.streak))}
-    ${tile('📊', L.stAvgWork, fmtMin(st.avgWork), L.stDays(st.count))}
-    ${tile('☕', L.stAvgPause, fmtMin(st.avgPause))}
-    ${tile('🚪', L.stAvgIn, tm(st.avgIn))}
-    ${st.avgOut != null ? tile('🏁', L.stAvgOut, tm(st.avgOut)) : ''}
+    ${tile(SYM(SY.sunrise), L.stEarliest, st.earliest.time, fmtDate(st.earliest.day))}
+    ${st.latest ? tile(SYM(SY.moon), L.stLatest, st.latest.time, fmtDate(st.latest.day)) : ''}
+    ${tile(SYM(SY.timer), L.stLongest, fmtMin(st.longest.min), fmtDate(st.longest.day))}
+    ${tile(SYM(SY.streak), L.stStreak, st.streak, L.stStreakSub(st.streak))}
+    ${tile(SYM(SY.avg), L.stAvgWork, fmtMin(st.avgWork), L.stDays(st.count))}
+    ${tile(SYM(SY.cup), L.stAvgPause, fmtMin(st.avgPause))}
+    ${tile(SYM(SY.enter), L.stAvgIn, tm(st.avgIn))}
+    ${st.avgOut != null ? tile(SYM(SY.leave), L.stAvgOut, tm(st.avgOut)) : ''}
   </div>
-  <div class="stats stats-x one">${tile('💰', L.stChf, `<span class="${saldo < 0 ? 'neg' : 'pos'}">${chfOf(saldo)}</span>`, `${fmtMin(saldo, true)} · ${L.stChfSub(CONFIG.hourlyRate.toFixed(2))}`)}</div>`;
+  <div class="stats stats-x one">${tile(SYM(SY.coin), L.stChf, `<span class="${saldo < 0 ? 'neg' : 'pos'}">${chfOf(saldo)}</span>`, `${fmtMin(saldo, true)} · ${L.stChfSub(CONFIG.hourlyRate.toFixed(2))}`)}</div>`;
 }
 
 // ---------------- Ring ----------------
@@ -860,7 +880,7 @@ function vacBlock(L, y) {
     <div class="vac-grid">${cell(L.vacEnt, v.entitlement)}${cell(L.vacTaken, v.taken)}${cell(L.vacPlanned, v.planned)}${cell(L.vacLeft, v.left, v.left < 0 ? 'neg' : 'pos')}</div>
     <i class="vac-bar"><span style="width:${Math.min(100, v.entitlement ? (v.used / v.entitlement) * 100 : 0)}%"></span></i>
     ${y === sy ? `<p class="hint">${L.vacProRata(y)}</p>` : ''}
-    ${v.closure ? `<p class="hint">🎄 ${L.vacClosure(v.closure)}</p>` : ''}
+    ${v.closure ? `<p class="hint">${L.vacClosure(v.closure)}</p>` : ''}
   </div>`;
 }
 
