@@ -34,7 +34,9 @@
     // Farbschema sofort setzen, damit der Startbildschirm nicht aufblitzt
     try {
       var p = JSON.parse(localStorage.getItem('stempeluhr.prefs') || '{}'), t = p.theme;
-      if (!t || t === 'auto') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dunkel' : 'weiss';
+      var dk = matchMedia('(prefers-color-scheme: dark)').matches;
+      if (!t || t === 'auto') t = dk ? 'dunkel' : 'weiss';
+      else if (t === 'glas') t = dk ? 'glas-dunkel' : 'glas-hell';
       document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
@@ -43,8 +45,10 @@
     [data-theme="creme"] #splash { background: #f3ede1; }
     [data-theme="dunkel"] #splash { background: #111317; }
     [data-theme="dunkelblau"] #splash { background: #0b1626; }
+    [data-theme="glas-hell"] #splash { background: #e9eef6; }
+    [data-theme="glas-dunkel"] #splash { background: #05070d; }
     #splash img { width: 46vw; max-width: 260px; filter: brightness(0); animation: sp-in .5s ease-out both; }
-    [data-theme="dunkel"] #splash img, [data-theme="dunkelblau"] #splash img { filter: brightness(0) invert(1); }
+    [data-theme="dunkel"] #splash img, [data-theme="dunkelblau"] #splash img, [data-theme="glas-dunkel"] #splash img { filter: brightness(0) invert(1); }
     #splash.gone { opacity: 0; pointer-events: none; }
     @keyframes sp-in { from { opacity: 0; transform: scale(.96); } }
   </style>
