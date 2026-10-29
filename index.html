@@ -34,6 +34,8 @@
     // Farbschema sofort setzen, damit der Startbildschirm nicht aufblitzt
     try {
       var t = matchMedia('(prefers-color-scheme: dark)').matches ? 'glas-dunkel' : 'glas-hell';   // immer Glas
+      var hr = new Date().getHours();
+      document.documentElement.dataset.tod = hr >= 5 && hr < 11 ? 'morgen' : hr < 17 && hr >= 11 ? 'tag' : hr >= 17 && hr < 21 ? 'abend' : 'nacht';
       document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
