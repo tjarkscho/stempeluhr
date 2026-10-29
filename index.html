@@ -33,10 +33,7 @@
   <script>
     // Farbschema sofort setzen, damit der Startbildschirm nicht aufblitzt
     try {
-      var p = JSON.parse(localStorage.getItem('stempeluhr.prefs') || '{}'), t = p.theme;
-      var dk = matchMedia('(prefers-color-scheme: dark)').matches;
-      if (!t || t === 'auto') t = dk ? 'dunkel' : 'weiss';
-      else if (t === 'glas') t = dk ? 'glas-dunkel' : 'glas-hell';
+      var t = matchMedia('(prefers-color-scheme: dark)').matches ? 'glas-dunkel' : 'glas-hell';   // immer Glas
       document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
