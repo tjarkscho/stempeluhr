@@ -81,7 +81,7 @@ const DICT = {
     absHint: 'Tag antippen: Ferien → ½ Ferien → Krank → leer. Wird mit Tagessoll (8:00 / 4:00) gutgeschrieben.',
     vacDays: (y, n) => `Ferientage ${y}: ${n}`,
     theme: 'Farbschema', language: 'Sprache',
-    themes: { auto: 'Auto', weiss: 'Weiss', dunkel: 'Dunkel', creme: 'Creme', dunkelblau: 'Dunkelblau' },
+    themes: { auto: 'Auto', glas: 'Glas', weiss: 'Weiss', dunkel: 'Dunkel', creme: 'Creme', dunkelblau: 'Dunkelblau' },
   },
   fr: {
     days: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
@@ -168,12 +168,13 @@ const DICT = {
     absHint: 'Toucher un jour : Vacances → ½ vacances → Maladie → vide. Crédité avec le temps prévu (8:00 / 4:00).',
     vacDays: (y, n) => `Jours de vacances ${y} : ${n}`,
     theme: 'Thème', language: 'Langue',
-    themes: { auto: 'Auto', weiss: 'Blanc', dunkel: 'Sombre', creme: 'Crème', dunkelblau: 'Bleu nuit' },
+    themes: { auto: 'Auto', glas: 'Verre', weiss: 'Blanc', dunkel: 'Sombre', creme: 'Crème', dunkelblau: 'Bleu nuit' },
   },
 };
 
-export const THEMES = ['auto', 'weiss', 'dunkel', 'creme', 'dunkelblau'];
-const THEME_COLOR = { weiss: '#ffffff', dunkel: '#1b1e24', creme: '#fbf7ef', dunkelblau: '#12233a' };
+export const THEMES = ['auto', 'glas', 'weiss', 'dunkel', 'creme', 'dunkelblau'];
+const THEME_COLOR = { weiss: '#ffffff', dunkel: '#1b1e24', creme: '#fbf7ef', dunkelblau: '#12233a', 'glas-hell': '#e9eef6', 'glas-dunkel': '#05070d' };
+const ICON_OF = { 'glas-hell': 'weiss', 'glas-dunkel': 'dunkel' };   // Glas nutzt die Icons von Weiss/Dunkel
 
 function load() {
   try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; }
@@ -188,7 +189,7 @@ export const prefs = {
 };
 
 // Gerät wechselt hell/dunkel -> sofort übernehmen
-mq?.addEventListener?.('change', () => { if (prefs.theme === 'auto') applyPrefs(); });
+mq?.addEventListener?.('change', () => { if (prefs.theme === 'auto' || prefs.theme === 'glas') applyPrefs(); });
 
 export function setPref(k, v) {
   prefs[k] = v;
@@ -197,14 +198,16 @@ export function setPref(k, v) {
 }
 
 export function applyPrefs() {
-  const theme = prefs.theme === 'auto' ? (mq?.matches ? 'dunkel' : 'weiss') : prefs.theme;
+  const theme = prefs.theme === 'auto' ? (mq?.matches ? 'dunkel' : 'weiss')
+    : prefs.theme === 'glas' ? (mq?.matches ? 'glas-dunkel' : 'glas-hell') : prefs.theme;   // Glas: hell/dunkel wie das Gerät
+  const icon = ICON_OF[theme] || theme;
   document.documentElement.dataset.theme = theme;
   document.documentElement.lang = prefs.lang === 'fr' ? 'fr-CH' : 'de-CH';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[theme]);
   // Icons passend zum Farbschema
   const base = import.meta.env.BASE_URL;
-  document.querySelector('link[rel="icon"]')?.setAttribute('href', `${base}favicon-${theme}.png`);
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-${theme}.png`);
+  document.querySelector('link[rel="icon"]')?.setAttribute('href', `${base}favicon-${icon}.png`);
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-${icon}.png`);
 }
 
 /** Aktuelles Wörterbuch */
