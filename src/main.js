@@ -823,9 +823,6 @@ function prefsControls() {
   const seg = (k, vals, lab) => `<div class="seg" data-seg="${k}"><span class="ind"></span>${vals.map((v) =>
     `<button type="button" class="${prefs[k] === v ? 'on' : ''}" data-act="pref" data-k="${k}" data-v="${v}">${lab(v)}</button>`).join('')}</div>`;
   return `<div class="prefs">
-    <span class="plabel">${L.theme}</span>
-    <div class="swatches">${THEMES.map((th) =>
-      `<button type="button" class="sw sw-${th} ${prefs.theme === th ? 'on' : ''}" data-act="pref" data-k="theme" data-v="${th}"><i></i>${L.themes[th]}</button>`).join('')}</div>
     <span class="plabel">${L.language}</span>
     ${seg('lang', ['de', 'fr'], (v) => v.toUpperCase())}
     ${S.user ? `<span class="plabel">${L.reminder}</span>
@@ -1225,6 +1222,7 @@ function animateAfterRender() {
   const ind = app.querySelector('.tabbar .ind');
   const to = VIEWS.indexOf(S.view);
   if (pager) {
+    if (shownIdx !== to || dragDx) pagerBusyUntil = performance.now() + 560;   // während der Fahrt nicht neu zeichnen
     pager.style.transform = `translateX(${-to * 100}%)`;
     if (ind) ind.style.transform = `translateX(${to * 100}%)`;
     if (shownIdx !== to || dragDx) {
@@ -1343,7 +1341,11 @@ function countUp() {
   requestAnimationFrame(step);
 }
 
+let pagerBusyUntil = 0, deferredRender = null;
 function render() {
+  // läuft gerade der Seitenwechsel, Neuzeichnen (z. B. nachgeladene Spesen) bis danach verschieben -> kein Ruckeln
+  const wait = pagerBusyUntil - performance.now();
+  if (S.user && wait > 0 && VIEWS.indexOf(S.view) === shownIdx) { clearTimeout(deferredRender); deferredRender = setTimeout(render, wait + 16); return; }
   if (!S.user) {
     app.innerHTML = viewLogin() + (S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : '');
     return;
