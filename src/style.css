@@ -572,3 +572,5 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
 [data-theme="glas-hell"] :is(.sheet, .drawer) { --g-solid: rgba(246,248,252,.9); }
 [data-theme="glas-dunkel"] :is(.modal, .drawer-bg) { background: rgba(0,0,0,.5); }
 [data-theme="glas-hell"] :is(.modal, .drawer-bg) { background: rgba(10,20,40,.28); }
+/* Heatmap im Ferienkalender auch im Glas-Design */
+[data-theme^="glas"] .cd.heat, [data-theme^="glas"] .cd.heat.we { background: hsl(var(--h) var(--heat-s) var(--heat-l)); color: var(--heat-t); }
