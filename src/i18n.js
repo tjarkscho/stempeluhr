@@ -81,6 +81,21 @@ const DICT = {
     absHint: 'Tag antippen: Ferien → ½ Ferien → Krank → leer. Wird mit Tagessoll (8:00 / 4:00) gutgeschrieben.',
     vacDays: (y, n) => `Ferientage ${y}: ${n}`,
     theme: 'Farbschema', language: 'Sprache',
+    money: 'Saldo anzeigen in', moneyTime: 'Stunden', moneyChf: 'Franken',
+    vacAcc: 'Ferienkonto', vacEnt: 'Anspruch', vacTaken: 'Bezogen', vacPlanned: 'Geplant', vacLeft: 'Übrig',
+    vacProRata: (y) => `Eintritt 01.08.${y}: anteilig 5/12 von 20 Tagen`,
+    vacClosure: (n) => `Betriebsferien 24.12.–1.1.: noch ${n} Werktag(e) mit Ferien oder Überstunden decken`,
+    infoTitle: 'Ausblick', forecast: 'Prognose Monatsende', forecastSub: (a) => `bei Ø ${a} pro Tag`,
+    nextHol: 'Nächster Feiertag', inDays: (n) => n === 0 ? 'heute' : n === 1 ? 'morgen' : `in ${n} Tagen`, bridge: (d) => `Brückentag ${d}`,
+    archStats: 'Statistik', stEarliest: 'Früheste Ankunft', stLatest: 'Spätester Feierabend', stLongest: 'Längster Tag',
+    stAvgWork: 'Ø Arbeitszeit', stAvgPause: 'Ø Pause', stAvgIn: 'Ø Ankunft', stAvgOut: 'Ø Feierabend', stStreak: 'Serie ohne Korrektur',
+    stStreakSub: (n) => `${n} Arbeitstag${n === 1 ? '' : 'e'} am Stück`, stDays: (n) => `aus ${n} Tagen`, stNone: 'Noch keine abgeschlossenen Tage.',
+    stChf: 'Saldo in Franken', stChfSub: (r) => `Stundenlohn ${r} Fr.`,
+    feierabend: 'Schönen Feierabend', fbToday: 'heute', fbSaldo: 'Saldo',
+    arrive: 'Angekommen?', arriveText: 'Jetzt einstempeln?', leave: 'Unterwegs?', leaveText: 'Jetzt ausstempeln?', notNow: 'Nicht jetzt',
+    autoTitle: 'Automatisch erinnern (iPhone)', autoRow: 'Beim Ankommen / Wegfahren fragen',
+    autoSteps: ['iPhone: App „Kurzbefehle“ → Automation → Neue Automation → „Ankommen“.', 'Ort wählen (z. B. NPS Gland), „Sofort ausführen“ aktivieren.', 'Aktion „URL öffnen“ mit dem Link unten (Einstempeln).', 'Optional: zweite Automation „Verlassen“ mit dem Link zum Ausstempeln.'],
+    autoIn: 'Link Einstempeln', autoOut: 'Link Ausstempeln', copied: 'Link kopiert',
     themes: { auto: 'Auto', glas: 'Glas', weiss: 'Weiss', dunkel: 'Dunkel', creme: 'Creme', dunkelblau: 'Dunkelblau' },
   },
   fr: {
@@ -168,6 +183,21 @@ const DICT = {
     absHint: 'Toucher un jour : Vacances → ½ vacances → Maladie → vide. Crédité avec le temps prévu (8:00 / 4:00).',
     vacDays: (y, n) => `Jours de vacances ${y} : ${n}`,
     theme: 'Thème', language: 'Langue',
+    money: 'Afficher le solde en', moneyTime: 'Heures', moneyChf: 'Francs',
+    vacAcc: 'Compte vacances', vacEnt: 'Droit', vacTaken: 'Pris', vacPlanned: 'Prévu', vacLeft: 'Reste',
+    vacProRata: (y) => `Entrée 01.08.${y} : prorata 5/12 de 20 jours`,
+    vacClosure: (n) => `Fermeture 24.12–1.1 : encore ${n} jour(s) ouvrable(s) à couvrir (vacances ou heures sup.)`,
+    infoTitle: 'Aperçu', forecast: 'Prévision fin du mois', forecastSub: (a) => `avec Ø ${a} par jour`,
+    nextHol: 'Prochain jour férié', inDays: (n) => n === 0 ? 'aujourd’hui' : n === 1 ? 'demain' : `dans ${n} jours`, bridge: (d) => `Pont ${d}`,
+    archStats: 'Statistiques', stEarliest: 'Arrivée la plus tôt', stLatest: 'Départ le plus tard', stLongest: 'Journée la plus longue',
+    stAvgWork: 'Ø temps de travail', stAvgPause: 'Ø pause', stAvgIn: 'Ø arrivée', stAvgOut: 'Ø départ', stStreak: 'Série sans correction',
+    stStreakSub: (n) => `${n} jour${n === 1 ? '' : 's'} de travail d’affilée`, stDays: (n) => `sur ${n} jours`, stNone: 'Pas encore de journées terminées.',
+    stChf: 'Solde en francs', stChfSub: (r) => `Salaire horaire ${r} Fr.`,
+    feierabend: 'Bonne fin de journée', fbToday: 'aujourd’hui', fbSaldo: 'Solde',
+    arrive: 'Arrivé ?', arriveText: 'Timbrer l’entrée maintenant ?', leave: 'En route ?', leaveText: 'Timbrer la sortie maintenant ?', notNow: 'Pas maintenant',
+    autoTitle: 'Rappel automatique (iPhone)', autoRow: 'Demander à l’arrivée / au départ',
+    autoSteps: ['iPhone : app « Raccourcis » → Automatisation → Nouvelle → « Arrivée ».', 'Choisir le lieu (p. ex. NPS Gland), activer « Exécuter immédiatement ».', 'Action « Ouvrir l’URL » avec le lien ci-dessous (entrée).', 'Option : deuxième automatisation « Départ » avec le lien de sortie.'],
+    autoIn: 'Lien entrée', autoOut: 'Lien sortie', copied: 'Lien copié',
     themes: { auto: 'Auto', glas: 'Verre', weiss: 'Blanc', dunkel: 'Sombre', creme: 'Crème', dunkelblau: 'Bleu nuit' },
   },
 };
@@ -186,6 +216,7 @@ const browserFr = typeof navigator !== 'undefined' && /^fr/i.test(navigator.lang
 export const prefs = {
   lang: saved.lang === 'fr' || saved.lang === 'de' ? saved.lang : (browserFr ? 'fr' : 'de'),
   theme: 'glas', // immer Glas, hell/dunkel automatisch wie das Gerät
+  money: saved.money === 'chf' ? 'chf' : 'time',   // Saldo in Stunden oder Franken
 };
 
 // Gerät wechselt hell/dunkel -> sofort übernehmen
