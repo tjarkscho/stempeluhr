@@ -8,6 +8,7 @@ import {
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
 import { legalText } from './lib/legal.js';
+import { backupSupported, backupState, chooseFolder, runBackup } from './lib/backup.js';
 import { fmtChf as chfOf, vacationAccount, upcomingHolidays, forecastMonthEnd, workStats, timeOfDay } from './lib/extras.js';
 import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, PHOTO_CATS, kmAmount, lastWorkday, cleanRoute } from './lib/receipt.js';
 import { groupByDay, dayStats, dayTargets, weekStats, saldoThrough, validateDay, rangeStats, saldoAt, dayRecord, lawBreak } from './lib/calc.js';
@@ -195,6 +196,28 @@ async function loadAll() {
   if (!hadCache) countUpNext = true;
   render();
   checkHash();
+  checkBackup();
+}
+
+// ---- Monatliche Sicherung auf den PC ----
+async function checkBackup() {
+  if (!backupSupported()) return;
+  S.backup = await backupState().catch(() => null);
+  if (S.backup?.dir && S.backup.due && S.backup.perm === 'granted') await doBackup(true);
+  else render();
+}
+async function doBackup(auto = false) {
+  const L = T();
+  try {
+    if (!S.backup?.dir) await chooseFolder();
+    if (!S.expenses?.length) await loadExpenses().catch(() => {});
+    await runBackup({ entries: S.entries.filter((e) => !e.pending), absences: S.absences, expenses: S.expenses, byDay: S.byDay });
+    toast(L.bkDone);
+  } catch (e) {
+    if (e?.name !== 'AbortError' && !auto) toast(L.bkFail + (e.message || e), true);
+  }
+  S.backup = await backupState().catch(() => null);
+  render();
 }
 
 // Link aus dem iPhone-Kurzbefehl (#ein / #aus): nachfragen statt blind stempeln
@@ -427,6 +450,7 @@ function viewStamp() {
   return `
   ${pend ? `<div class="offline">${ICON.cloud}<span>${T().pending(pend)}</span></div>` : ''}
   ${forgot ? `<div class="warn" data-act="edit" data-day="${forgot}">${ICON.warn}<span>${L.forgot(fmtDate(forgot))}</span></div>` : ''}
+  ${S.backup?.dir && S.backup.due ? `<div class="offline bk-due" data-act="backup">${ICON.download}<span>${L.bkDue}</span></div>` : ''}
   <div class="greet"><h2>${L.greet(hr)}, ${esc(name)}</h2>${endTxt ? `<p>${endTxt}</p>` : ''}</div>
   <section class="card hero">
     <div class="state s-${st.state}"><span class="dot"></span>${stateTxt}</div>
@@ -1050,6 +1074,10 @@ function viewSettings() {
   return `<div class="modal" data-act="setclose"><div class="sheet" data-stop="1">
     <div class="sheethead"><b>${T().settings}</b><button class="icon" data-act="setclose">${ICON.close}</button></div>
     ${prefsControls()}
+    ${backupSupported() ? (() => { const L = T(), b = S.backup; return `<div class="prefs"><span class="plabel">${L.bkTitle}</span>
+      <div class="bk-box"><span>${b?.dir ? L.bkFolder(esc(b.name)) : L.bkHint}</span>${b?.dir ? `<small>${b.last ? L.bkLast(fmtDate(dayKey(new Date(b.last)))) : L.bkNever}</small>` : ''}
+      <div class="bk-btns">${b?.dir ? `<button type="button" class="btn" data-act="backup" ${S.busy ? 'disabled' : ''}>${L.bkNow}</button>` : ''}
+      <button type="button" class="btn ghost" data-act="bkfolder">${L.bkChoose}</button></div></div></div>`; })() : ''}
     <div class="prefs"><span class="plabel">${T().autoTitle}</span>
     <button type="button" class="toggle navrow" data-act="auto"><span>${T().autoRow}</span>${ICON.next}</button></div>
     <div class="prefs"><span class="plabel">${G.title}</span>
@@ -1648,6 +1676,8 @@ app.addEventListener('click', async (e) => {
   else if (a === 'stampnow') { const k = S.prompt; S.prompt = null; if (k === 'in') stamp(['in']); else stamp(todayInfo().st.state === 'break' ? ['break_end', 'out'] : ['out']); }
   else if (a === 'promptclose') { S.prompt = null; render(); }
   else if (a === 'auto') { S.settings = 'auto'; render(); }
+  else if (a === 'backup') doBackup();
+  else if (a === 'bkfolder') { chooseFolder().then(async () => { S.backup = await backupState(); doBackup(); }).catch(() => {}); }
   else if (a === 'copylink') { navigator.clipboard?.writeText(el.dataset.url).then(() => toast(T().copied)).catch(() => {}); }
   else if (a === 'rep') periodPdf(el.dataset.k);
   else if (a === 'pt') { S.chartSel = +el.dataset.i; render(); }
