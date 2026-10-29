@@ -498,7 +498,7 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
 /* grosse Knöpfe: farbiges Glas */
 [data-theme^="glas"] .big { border-radius: 26px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.18);
   -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 6px rgba(0,0,0,.12), 0 10px 26px color-mix(in srgb, var(--bc) 38%, transparent); }
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 6px rgba(0,0,0,.12), 0 8px 20px color-mix(in srgb, var(--bc) 20%, transparent); }
 [data-theme^="glas"] .big.go { --bc: var(--go); } [data-theme^="glas"] .big.stop { --bc: var(--stop); } [data-theme^="glas"] .big.pause { --bc: var(--pause); }
 [data-theme^="glas"] .big { background: linear-gradient(180deg, color-mix(in srgb, var(--bc) 78%, #fff) 0%, color-mix(in srgb, var(--bc) 88%, transparent) 55%, color-mix(in srgb, var(--bc) 96%, #000) 100%); }
 [data-theme^="glas"] .btn { border-radius: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent); }
@@ -518,12 +518,17 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
 [data-theme="glas-dunkel"] .cd { background: rgba(255,255,255,.05); }
 [data-theme^="glas"] .cd.we { background: transparent; }
 [data-theme^="glas"] .r-track { opacity: .18; }
-[data-theme^="glas"] .ring circle.r-base, [data-theme^="glas"] .ring circle.r-over { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--ring) 45%, transparent)); }
+[data-theme^="glas"] .ring circle.r-base { filter: drop-shadow(0 0 2px color-mix(in srgb, var(--ring) 22%, transparent)); }
 [data-theme^="glas"] .confirm { background: rgba(0,0,0,.08); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 
 /* Auswahl-Kachel in den Einstellungen */
 .sw-glas i { background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.95), rgba(255,255,255,.2) 45%), linear-gradient(135deg, #4a8cff, #ff78aa 55%, #46d7be); }
 .swatches { grid-template-columns: repeat(6, 1fr); }
+
+/* Leistung: Inhalte auf der Seite brauchen keine Echtzeit-Unschärfe (der Hintergrund ist ohnehin weich) –
+   nur Kopfzeile, Tab-Leiste, Fenster und Meldungen blurren. Spart beim Wischen zwischen den Tabs viel GPU. */
+[data-theme^="glas"] main :is(.card, .stats > div, .balance > div, .state, .chip, input, select, .warn, .offline, .slider, .toggle, .seg) {
+  -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 /* Glas ohne Unterstützung für backdrop-filter: fester Hintergrund */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -552,11 +557,18 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
 /* nur transform + opacity animieren -> läuft auf der GPU mit voller Bildrate (60/120 Hz) */
 [data-theme^="glas"] .tabbar .ind { will-change: transform; transform-origin: center; backface-visibility: hidden; }
 [data-theme^="glas"] .tabbar .ind::after { content: ''; position: absolute; inset: 0; border-radius: inherit; opacity: 0; pointer-events: none;
-  background: radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.35), rgba(255,255,255,.08) 60%, transparent);
-  box-shadow: inset 0 1px 2px rgba(255,255,255,.9), 0 6px 18px rgba(80,150,255,.35); will-change: opacity; }
+  background: radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.2), rgba(255,255,255,.05) 60%, transparent);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.8); will-change: opacity; }
 [data-theme^="glas"] .tabbar .ind.drop::after { animation: dropShine .64s ease-out; }
 @keyframes dropShine { 40% { opacity: 1; } }
 [data-theme^="glas"] .sw.on { border-color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent), inset 0 1px 0 var(--g-rim), var(--g-shadow); }
 [data-theme^="glas"] .sheet, [data-theme^="glas"] .drawer { --g-solid: color-mix(in srgb, var(--bg) 84%, transparent); }
 .sw { font-size: 10.5px; }
 @media (prefers-reduced-motion: reduce) { [data-theme^="glas"] .tabbar .ind.drop::after { animation: none; } }
+
+/* geöffnete Fenster (Einstellungen, Legal, Editor, Ferien): dunkleres, dichteres Glas für gute Lesbarkeit */
+[data-theme^="glas"] :is(.sheet, .drawer) { -webkit-backdrop-filter: blur(34px) saturate(160%); backdrop-filter: blur(34px) saturate(160%); }
+[data-theme="glas-dunkel"] :is(.sheet, .drawer) { --g-solid: rgba(12,14,20,.86); }
+[data-theme="glas-hell"] :is(.sheet, .drawer) { --g-solid: rgba(246,248,252,.9); }
+[data-theme="glas-dunkel"] :is(.modal, .drawer-bg) { background: rgba(0,0,0,.5); }
+[data-theme="glas-hell"] :is(.modal, .drawer-bg) { background: rgba(10,20,40,.28); }
