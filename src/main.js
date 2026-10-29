@@ -1234,7 +1234,19 @@ function animateAfterRender() {
       pager.classList.add('moving');
       const an = pager.animate([{ transform: from }, { transform: `translateX(${-to * 100}%)` }], { duration: 520, easing: EASE });
       an.onfinish = an.oncancel = () => pager.classList.remove('moving');
-      ind?.animate([{ transform: `translateX(${(shownIdx - dragDx / w) * 100}%)` }, { transform: `translateX(${to * 100}%)` }], { duration: 520, easing: EASE });
+      const fromX = (shownIdx - dragDx / w) * 100, toX = to * 100;
+      if (ind && document.documentElement.dataset.theme?.startsWith('glas')) {
+        // Glas: Tropfen löst sich, zieht sich in die Länge, schwappt am Ziel nach (wie bei Apple)
+        const mid = fromX + (toX - fromX) * 0.55, dir = Math.sign(toX - fromX) || 1;
+        ind.animate([
+          { transform: `translateX(${fromX}%) scale(1, 1)`, easing: 'cubic-bezier(.4,0,.6,1)' },
+          { transform: `translateX(${fromX + dir * 4}%) scale(.9, 1.08)`, offset: .12, easing: 'cubic-bezier(.3,0,.4,1)' },
+          { transform: `translateX(${mid}%) scale(1.42, .8)`, offset: .48, easing: 'cubic-bezier(.2,0,.3,1)' },
+          { transform: `translateX(${toX + dir * 3}%) scale(.9, 1.1)`, offset: .78, easing: 'cubic-bezier(.4,0,.4,1)' },
+          { transform: `translateX(${toX}%) scale(1, 1)` },
+        ], { duration: 640 });
+        ind.classList.remove('drop'); void ind.offsetWidth; ind.classList.add('drop');
+      } else ind?.animate([{ transform: `translateX(${fromX}%)` }, { transform: `translateX(${toX}%)` }], { duration: 520, easing: EASE });
     }
   }
   shownIdx = to; dragDx = 0;
