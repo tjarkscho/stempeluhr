@@ -82,6 +82,8 @@ const DICT = {
     vacDays: (y, n) => `Ferientage ${y}: ${n}`,
     theme: 'Farbschema', language: 'Sprache',
     money: 'Saldo anzeigen in', moneyTime: 'Stunden', moneyChf: 'Franken',
+    gauge: 'Anzeige Arbeitszeit', gauges: { ring: 'Ring', glas: 'Glas', zeit: 'Zeitleiste', schlicht: 'Schlicht' },
+    gWorked: 'Heute gearbeitet', gNow: 'jetzt', gEnd: 'Feierabend', gPct: (p, t) => `${p} % von ${t}`,
     vacAcc: 'Ferienkonto', vacEnt: 'Anspruch', vacTaken: 'Bezogen', vacPlanned: 'Geplant', vacLeft: 'Übrig',
     vacProRata: (y) => `Eintritt 01.08.${y}: anteilig 5/12 von 20 Tagen`,
     vacClosure: (n) => `Betriebsferien 24.12.–1.1.: noch ${n} Werktag(e) mit Ferien oder Überstunden decken`,
@@ -184,6 +186,8 @@ const DICT = {
     vacDays: (y, n) => `Jours de vacances ${y} : ${n}`,
     theme: 'Thème', language: 'Langue',
     money: 'Afficher le solde en', moneyTime: 'Heures', moneyChf: 'Francs',
+    gauge: 'Affichage du temps', gauges: { ring: 'Anneau', glas: 'Verre', zeit: 'Chronologie', schlicht: 'Sobre' },
+    gWorked: 'Travaillé aujourd’hui', gNow: 'maintenant', gEnd: 'Fin', gPct: (p, t) => `${p} % de ${t}`,
     vacAcc: 'Compte vacances', vacEnt: 'Droit', vacTaken: 'Pris', vacPlanned: 'Prévu', vacLeft: 'Reste',
     vacProRata: (y) => `Entrée 01.08.${y} : prorata 5/12 de 20 jours`,
     vacClosure: (n) => `Fermeture 24.12–1.1 : encore ${n} jour(s) ouvrable(s) à couvrir (vacances ou heures sup.)`,
@@ -217,6 +221,7 @@ export const prefs = {
   lang: saved.lang === 'fr' || saved.lang === 'de' ? saved.lang : (browserFr ? 'fr' : 'de'),
   theme: 'glas', // immer Glas, hell/dunkel automatisch wie das Gerät
   money: saved.money === 'chf' ? 'chf' : 'time',   // Saldo in Stunden oder Franken
+  gauge: ['ring', 'glas', 'zeit', 'schlicht'].includes(saved.gauge) ? saved.gauge : 'ring',   // Darstellung der Arbeitszeit
 };
 
 // Gerät wechselt hell/dunkel -> sofort übernehmen
