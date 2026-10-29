@@ -574,3 +574,64 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
 [data-theme="glas-hell"] :is(.modal, .drawer-bg) { background: rgba(10,20,40,.28); }
 /* Heatmap im Ferienkalender auch im Glas-Design */
 [data-theme^="glas"] .cd.heat, [data-theme^="glas"] .cd.heat.we { background: hsl(var(--h) var(--heat-s) var(--heat-l)); color: var(--heat-t); }
+
+/* =================== Ausblick, Statistik, Ferienkonto, Kurzbefehl, Feierabend =================== */
+.outlook { padding: 6px 16px; margin-top: 10px; }
+.ol-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.ol-row + .ol-row { border-top: 1px solid var(--line); }
+.ol-row > div { flex: 1; min-width: 0; }
+.ol-row span { display: block; font-size: 14px; font-weight: 600; }
+.ol-row small { display: block; font-size: 12px; color: var(--muted); }
+.ol-row > b { font-size: 17px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ol-ic { font-size: 20px; width: 28px; text-align: center; }
+.seg4 { grid-template-columns: repeat(4, 1fr); margin-bottom: 12px; }
+.seg4 .ind { width: 25%; }
+.seg4 button { font-size: 14px; padding: 10px 2px; }
+.stats-x { margin-bottom: 10px; }
+.stats-x.one { grid-template-columns: 1fr; }
+.stats-x span { font-size: 12px; }
+.stats-x b { font-size: 20px; }
+.vac { margin-top: 16px; padding: 14px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 8%, transparent); border: 1px solid var(--line); }
+.vac-head { margin-bottom: 10px; }
+.vac-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+.vac-grid span { display: block; font-size: 11px; color: var(--muted); }
+.vac-grid b { font-size: 19px; font-variant-numeric: tabular-nums; }
+.vac-bar { display: block; height: 6px; border-radius: 3px; background: var(--line); margin: 12px 0 4px; overflow: hidden; }
+.vac-bar span { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.vac .hint { margin: 8px 0 0; }
+.steps { margin: 4px 0 14px; padding-left: 20px; font-size: 14px; line-height: 1.5; }
+.steps li { margin-bottom: 6px; }
+.autolink { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; margin-bottom: 12px; }
+.autolink span { grid-column: 1 / -1; font-size: 12px; color: var(--muted); font-weight: 600; }
+.autolink code { font-size: 12px; padding: 8px 10px; border-radius: 10px; overflow-wrap: anywhere; background: color-mix(in srgb, var(--text) 8%, transparent); }
+.autolink .btn { margin: 0; width: auto; padding: 8px 14px; }
+.prompt { text-align: center; }
+.prompt-ic { font-size: 44px; margin: 6px 0 2px; }
+.prompt h3 { margin: 4px 0; font-size: 22px; }
+.prompt p { margin: 0 0 18px; color: var(--muted); }
+.prompt .big { width: 100%; }
+.confirm.fb { pointer-events: auto; }
+.fb-box { padding: 26px 30px 20px; min-width: 250px; }
+.fb-box .cc-ring { fill: color-mix(in srgb, var(--cc) 12%, transparent); animation-duration: .9s; }
+.fb-num { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; margin-top: 4px; }
+.fb-num small { display: block; font-size: 13px; font-weight: 500; color: var(--muted); }
+.fb-row { display: flex; gap: 10px; align-items: center; margin: 8px 0 4px; }
+.fb-chip { padding: 4px 10px; border-radius: 99px; font-weight: 700; font-variant-numeric: tabular-nums; background: color-mix(in srgb, currentColor 14%, transparent); }
+.fb-sal { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fb-box b { animation: fbUp .5s .15s cubic-bezier(.22,1,.36,1) both; }
+.fb-num { animation: fbUp .5s .25s cubic-bezier(.22,1,.36,1) both; }
+.fb-row { animation: fbUp .5s .35s cubic-bezier(.22,1,.36,1) both; }
+@keyframes fbUp { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .fb-box b, .fb-num, .fb-row { animation: none; } }
+
+/* Hintergrund nach Tageszeit (nur Glas): morgens hell/kühl, tagsüber neutral, abends warm, nachts tief */
+[data-theme^="glas"][data-tod="morgen"] body::before { background:
+  radial-gradient(60% 42% at 100% 0%, rgba(90,175,255,.55), transparent 72%),
+  radial-gradient(70% 45% at 0% 100%, rgba(30,110,200,.42), transparent 72%), var(--bg); }
+[data-theme^="glas"][data-tod="abend"] body::before { background:
+  radial-gradient(55% 40% at 100% 0%, rgba(60,110,230,.5), transparent 72%),
+  radial-gradient(70% 45% at 0% 100%, rgba(230,120,60,.38), transparent 72%), var(--bg); }
+[data-theme^="glas"][data-tod="nacht"] body::before { background:
+  radial-gradient(55% 40% at 100% 0%, rgba(40,70,170,.42), transparent 72%),
+  radial-gradient(70% 45% at 0% 100%, rgba(20,30,110,.5), transparent 72%), var(--bg); }
+.balance b[data-chf] { font-size: 16px; white-space: nowrap; letter-spacing: -.01em; }
