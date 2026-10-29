@@ -404,13 +404,14 @@ function viewStamp() {
   // Begrüssung + voraussichtlicher Feierabend (inkl. noch fehlender gesetzlicher Pause)
   const hr = +hhmm(now).slice(0, 2);
   const name = CONFIG.employee.split(' ')[0];
-  let endTxt = '';
+  let endTxt = '', endTs = st.out || null;
   if (st.state !== 'off') {
     const target = Math.max(0, t.soll - t.credit);
     const extra = Math.max(0, lawBreak(target) - st.pause);   // noch fehlende gesetzliche Pause
     if (target && need === 0 && (st.state === 'break' || extra === 0)) endTxt = L.sollReached;
     else if (target) {
-      endTxt = st.state === 'break' ? L.endAfterBreak(fmtMin(need)) : L.endAt(hhmm(new Date(now.getTime() + (need + extra) * 60000)));
+      endTs = new Date(now.getTime() + (need + extra) * 60000);
+      endTxt = st.state === 'break' ? L.endAfterBreak(fmtMin(need)) : L.endAt(hhmm(endTs));
     }
   } else if (st.in) endTxt = L.niceEvening;
   let buttons = '';
@@ -429,8 +430,8 @@ function viewStamp() {
   <div class="greet"><h2>${L.greet(hr)}, ${esc(name)}</h2>${endTxt ? `<p>${endTxt}</p>` : ''}</div>
   <section class="card hero">
     <div class="state s-${st.state}"><span class="dot"></span>${stateTxt}</div>
-    ${ring(st.total, Math.max(0, t.soll - t.credit), L, st.state === 'work')}
-    <div class="sub">${L.workedToday}${t.label ? ` · ${esc(label(t.label))}` : ''}</div>
+    ${gauge(st, Math.max(0, t.soll - t.credit), L, now, endTs)}
+    ${prefs.gauge === 'schlicht' || prefs.gauge === 'zeit' ? (t.label ? `<div class="sub">${esc(label(t.label))}</div>` : '') : `<div class="sub">${L.workedToday}${t.label ? ` · ${esc(label(t.label))}` : ''}</div>`}
     <div class="facts">
       <div><span>${L.in}</span><b>${st.in ? hhmm(st.in) : '–'}</b></div>
       <div><span>${L.pause}</span><b>${fmtMin(st.pause)}</b></div>
@@ -563,6 +564,61 @@ function ring(worked, target, L, running = false) {
       ${arc(base, 'r-base')}${arc(over, 'r-over')}
     </g></svg>
     <div class="ring-in"><div class="clock" data-count="${worked}">${fmtMin(worked)}</div><div class="ring-sub">${sub}</div></div>
+  </div>`;
+}
+
+// Darstellung der Arbeitszeit (Einstellung): Ring, Glas, Zeitleiste, Schlicht
+function gauge(st, target, L, now, endTs) {
+  const worked = st.total;
+  const g = prefs.gauge;
+  if (g === 'ring' || !st) return ring(worked, target, L, st.state === 'work');
+  const ref = target > 0 ? target : CONFIG.sollDayMin;
+  const frac = Math.min(1, worked / ref);
+  const pct = Math.round((worked / ref) * 100);
+  const sub = target > 0
+    ? (worked > target ? `<b class="over">+${fmtMin(worked - target)}</b> ${L.overtime}` : `${L.of} ${fmtMin(target)}`)
+    : (worked ? `<b class="over">+${fmtMin(worked)}</b> ${L.overtime}` : L.noTarget);
+  const clock = `<span class="clock" data-count="${worked}">${fmtMin(worked)}</span>`;
+  if (g === 'glas') {
+    const lvl = 196 - 192 * frac;                                    // Füllhöhe im Kreis
+    const over = target > 0 && worked > target;
+    const wave = (y, d) => `M-200 ${y} q25 -${d} 50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 V210 H-200Z`;
+    return `<div class="ring gl ${over ? 'is-over' : ''} ${frac > 0.55 ? 'is-high' : ''}" role="img" aria-label="${fmtMin(worked)} / ${fmtMin(target)}">
+      <svg viewBox="0 0 200 200"><defs><clipPath id="glc"><circle cx="100" cy="100" r="92"/></clipPath>
+        <linearGradient id="glw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="glw1"/><stop offset="1" class="glw2"/></linearGradient></defs>
+        <circle cx="100" cy="100" r="94" class="gl-glass"/>
+        <g clip-path="url(#glc)">${worked > 0 ? `<path class="gl-wave gl-back" d="${wave(lvl + 3, 7)}"/><path class="gl-wave" fill="url(#glw)" d="${wave(lvl, 8)}"/>` : ''}</g>
+        <ellipse cx="70" cy="48" rx="30" ry="11" transform="rotate(-25 70 48)" class="gl-shine"/>
+      </svg>
+      <div class="ring-in">${clock.replace('class="clock"', 'class="clock gl-num"')}<div class="ring-sub">${sub}</div></div>
+    </div>`;
+  }
+  if (g === 'schlicht') {
+    return `<div class="gs">
+      <span class="gs-lbl">${L.gWorked}</span>
+      <div class="gs-num">${clock}</div>
+      <i class="gs-bar"><span style="width:${(frac * 100).toFixed(1)}%"></span>${target > 0 && worked > target ? `<em style="width:${Math.min(100, ((worked - target) / ref) * 100).toFixed(1)}%"></em>` : ''}</i>
+      <div class="gs-row"><span>${st.in ? hhmm(st.in) : '–'}</span><span>${target > 0 ? L.gPct(pct, fmtMin(target)) : sub}</span><span>${endTs ? hhmm(endTs) : '–'}</span></div>
+    </div>`;
+  }
+  // Zeitleiste: Achse mind. 06–18 Uhr, Arbeit grün, Pausen als Lücken, Rest bis Feierabend gestrichelt
+  const hOf = (d) => { const [h, m] = hhmm(d).split(':').map(Number); return h + m / 60; };
+  const nowH = hOf(now), inH = st.in ? hOf(st.in) : nowH, endH = endTs ? hOf(endTs) : nowH;
+  let a = Math.min(6, Math.floor(inH)), b = Math.max(18, Math.ceil(Math.max(endH, nowH)));
+  if (endH < inH) b = 24;                                             // über Mitternacht
+  const X = (h) => 2 + ((h - a) / (b - a)) * 96;                     // in %
+  const segs = (st.segs || []).map(([s, e]) => [hOf(new Date(s)), hOf(new Date(e))]).filter(([s, e]) => e > s);
+  const live = st.state === 'work' || st.state === 'break';
+  const ticks = []; for (let h = a; h <= b; h += 2) ticks.push(h);
+  return `<div class="gt">
+    <div class="gt-head">${clock}<span class="ring-sub">${sub}</span></div>
+    <div class="gt-lbls"><span>${st.in ? hhmm(st.in) : ''}</span><span>${endTs ? `${L.gEnd} ${hhmm(endTs)}` : ''}</span></div>
+    <div class="gt-track">
+      ${segs.map(([s, e]) => `<i class="gt-seg" style="left:${X(s)}%;width:${Math.max(0.6, X(e) - X(s))}%"></i>`).join('')}
+      ${live && endTs && endH > nowH ? `<i class="gt-plan" style="left:${X(nowH)}%;width:${X(endH) - X(nowH)}%"></i>` : ''}
+      ${live ? `<i class="gt-now" style="left:${X(nowH)}%"></i>` : ''}
+    </div>
+    <div class="gt-ticks">${ticks.map((h) => `<span style="left:${X(h)}%">${String(h % 24).padStart(2, '0')}</span>`).join('')}</div>
   </div>`;
 }
 
@@ -953,13 +1009,15 @@ function viewLogin() {
 // ---------------- Einstellungen ----------------
 function prefsControls() {
   const L = T();
-  const seg = (k, vals, lab) => `<div class="seg" data-seg="${k}"><span class="ind"></span>${vals.map((v) =>
+  const seg = (k, vals, lab) => `<div class="seg ${vals.length > 2 ? `seg${vals.length}` : ''}" data-seg="${k}"><span class="ind"></span>${vals.map((v) =>
     `<button type="button" class="${prefs[k] === v ? 'on' : ''}" data-act="pref" data-k="${k}" data-v="${v}">${lab(v)}</button>`).join('')}</div>`;
   return `<div class="prefs">
     <span class="plabel">${L.language}</span>
     ${seg('lang', ['de', 'fr'], (v) => v.toUpperCase())}
     ${S.user ? `<span class="plabel">${L.money}</span>
-    ${seg('money', ['time', 'chf'], (v) => (v === 'chf' ? `${L.moneyChf} (${CONFIG.hourlyRate.toFixed(2)})` : L.moneyTime))}` : ''}
+    ${seg('money', ['time', 'chf'], (v) => (v === 'chf' ? `${L.moneyChf} (${CONFIG.hourlyRate.toFixed(2)})` : L.moneyTime))}
+    <span class="plabel">${L.gauge}</span>
+    ${seg('gauge', ['ring', 'glas', 'zeit', 'schlicht'], (v) => L.gauges[v])}` : ''}
     ${S.user ? `<span class="plabel">${L.reminder}</span>
     <button type="button" class="toggle ${S.pushOn ? 'on' : ''}" data-act="push" ${S.busy ? 'disabled' : ''}>
       <span>${L.reminderText}</span><i></i></button>
