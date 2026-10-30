@@ -89,6 +89,7 @@ const SY = {
 };
 
 const ICON = {
+  pen: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',
   cal: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
   gear: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
   prev: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
@@ -1155,12 +1156,13 @@ function viewExpenses() {
   <div class="exp-alt">
     <label class="link exp-pick">${ICON.image}<span>${L.expPickShort}</span><input type="file" accept="image/*" data-exp-file hidden /></label>
     <button class="link exp-pick" data-act="expkm">${ICON.car}<span>${L.expKm}</span></button>
+    <button class="link exp-pick" data-act="expmanual">${ICON.pen}<span>${L.expManual}</span></button>
   </div>
   ${items.length ? `<section class="card pad0"><ul class="list exp-list">${items.map((x) => `
     <li data-act="expopen" data-id="${x.id}">
-      <span class="thumb ${x.category === 'km' ? 'cat-km' : ''}">${x.category === 'km' ? ICON.car : x.photo_path && S.thumbs[x.photo_path] ? `<img src="${esc(S.thumbs[x.photo_path])}" alt="" loading="lazy" />` : ICON.camera}</span>
+      <span class="thumb ${x.category === 'km' ? 'cat-km' : ''}">${x.category === 'km' ? ICON.car : x.photo_path && S.thumbs[x.photo_path] ? `<img src="${esc(S.thumbs[x.photo_path])}" alt="" loading="lazy" />` : x.photo_path ? ICON.camera : ICON.pen}</span>
       <div><b>${esc((x.category === 'km' ? routeLabel(x.route) : '') || x.note || L.cat[x.category])}</b><small><i class="dot cat-${x.category}"></i>${x.category === 'km' ? `${String(Number(x.km)).replace('.', ',')} km` : L.cat[x.category]} · ${fmtDate(x.day)}</small></div>
-      <div class="r"><b>${fmtChf(x.amount)}</b></div>
+      <div class="r"><b>${fmtChf(x.amount)}</b>${x.currency && x.currency !== 'CHF' ? `<small>${x.currency} ${fmtChf(x.amount_orig)}</small>` : ''}</div>
     </li>`).join('')}</ul></section>` : `<p class="hint center-t">${L.expEmpty}</p>`}
   ${items.length ? `<div class="exp-btns"><button class="btn ghost" data-act="expdraft" ${S.busy ? 'disabled' : ''}>${L.expDraft}</button>
     ${items.some((x) => x.photo_path) ? `<button class="btn ghost" data-act="expphotos" ${S.busy ? 'disabled' : ''}>${ICON.image}<span>${L.expPhotos}</span></button>` : ''}</div>` : ''}
@@ -1216,9 +1218,12 @@ function viewExpSheet() {
     ${x.id && x.photo_path ? `<button class="link exp-dl" data-act="expphoto">${ICON.download}<span>${L.expPhotoDl}</span></button>` : ''}
     ${status ? `<p class="exp-ocr ${x.ocr}">${x.ocr === 'run' ? '<i class="spin"></i>' : ''}<span>${status}</span></p>` : ''}
     <div class="exp-grid">
-      <label class="fld"><span>${L.expAmount}</span><input data-exp="amount" inputmode="decimal" enterkeyhint="done" value="${esc(x.amount ?? '')}" placeholder="0.00" /></label>
+      <label class="fld"><span class="amt-l">${L.expAmountIn}<span class="cur" role="group">${['CHF', 'EUR'].map((c) => `<button type="button" class="${(x.cur || 'CHF') === c ? 'on' : ''}" data-act="expcur" data-v="${c}">${c}</button>`).join('')}</span></span>
+        <input data-exp="amount" inputmode="decimal" enterkeyhint="done" value="${esc(x.amount ?? '')}" placeholder="0.00" /></label>
       <label class="fld"><span>${L.expDate}</span><input type="date" data-exp="day" value="${esc(x.day)}" max="${dayKey(new Date())}" /></label>
     </div>
+    ${x.cur === 'EUR' ? `<div class="km-calc fx"><label class="fx-rate"><span>${L.expRate}</span><input data-exp="rate" inputmode="decimal" value="${esc(x.rate ?? '')}" placeholder="…" /></label><b class="fx-amt">${fxLine()}</b></div>
+    <p class="fx-src">${esc(x.rateSrc || '')}</p>` : ''}
     <span class="fld-l">${L.expCat}</span>
     <div class="chips">${PHOTO_CATS.map((c) => `<button type="button" class="chip cat-${c} ${x.category === c ? 'on' : ''}" data-act="expcat" data-v="${c}"><i></i>${L.cat[c]}</button>`).join('')}</div>
     <label class="fld"><span>${L.expNote}</span><input data-exp="note" maxlength="120" value="${esc(x.note || '')}" placeholder="${L.expNoteHint}" /></label>
@@ -1257,6 +1262,7 @@ function newExpense(file) {
       if (S.exp !== exp) return;
       if (r.amount != null && !exp.touched.amount) exp.amount = r.amount.toFixed(2);
       if (r.day && !exp.touched.day) exp.day = r.day;
+      if (r.currency === 'EUR' && !exp.touched.cur) { exp.cur = 'EUR'; S.exp === exp && render(); loadRate(exp); }
       exp.ocr = r.amount != null ? 'ok' : 'fail';
     } catch (e) {
       console.warn('OCR', e);
@@ -1276,6 +1282,29 @@ function newExpense(file) {
   })();
 }
 
+// ---- Fremdwährung (EUR) ----
+const fxChf = (x = S.exp) => { const a = numIn(x.amount), r = numIn(x.rate); return a > 0 && r > 0 ? Math.round(a * r * 100) / 100 : 0; };
+function fxLine() { const v = fxChf(); return v ? `= CHF ${fmtChf(v)}` : 'CHF –'; }
+function refreshFx() { const b = app.querySelector('.fx-amt'); if (b) b.textContent = fxLine(); }
+// EZB-Referenzkurs (frankfurter.dev) für das Belegdatum; bei Wochenende/Feiertag der letzte davor
+async function loadRate(x = S.exp) {
+  if (!x || x.cur !== 'EUR' || x.touched.rate) return;
+  const day = x.day || dayKey(new Date());
+  try {
+    let j = null;
+    for (const u of [`https://api.frankfurter.dev/v1/${day}?base=EUR&symbols=CHF`, `https://api.frankfurter.app/${day}?from=EUR&to=CHF`]) {
+      try { const r = await fetch(u); if (r.ok) { j = await r.json(); break; } } catch { /* nächste Quelle */ }
+    }
+    if (!j?.rates?.CHF) throw new Error('kein Kurs');
+    if (S.exp !== x || x.touched.rate || x.cur !== 'EUR') return;
+    x.rate = String(j.rates.CHF); x.rateSrc = T().expRateSrc(fmtDate(j.date));
+  } catch { if (S.exp === x) x.rateSrc = T().expRateFail; }
+  if (S.exp !== x) return;
+  const i = app.querySelector('[data-exp=rate]'); if (i) { i.value = x.rate || ''; if (x.rate) i.classList.add('flash'); }
+  const s = app.querySelector('.fx-src'); if (s) s.textContent = x.rateSrc || '';
+  refreshFx();
+}
+
 function openExpense(id) {
   const x = S.expenses.find((e) => e.id === id);
   if (!x) return;
@@ -1284,7 +1313,9 @@ function openExpense(id) {
     S.exp = { kind: 'km', id, day: x.day, km: String(ret ? Number(x.km) / 2 : Number(x.km)), ret, route: r.replace(/\s*(und zurück|aller-retour)$/i, ''), note: x.note, touched: {} };
     enterAnim = 'sheet'; return render();
   }
-  S.exp = { id, day: x.day, amount: Number(x.amount).toFixed(2), category: x.category, note: x.note, url: x.photo_path ? S.thumbs[x.photo_path] : null, photo_path: x.photo_path, touched: {} };
+  const eur = x.currency && x.currency !== 'CHF';
+  S.exp = { id, day: x.day, amount: Number(eur ? x.amount_orig : x.amount).toFixed(2), cur: eur ? x.currency : 'CHF', rate: eur ? String(Number(x.rate)) : '',
+    rateSrc: '', category: x.category, note: x.note, url: x.photo_path ? S.thumbs[x.photo_path] : null, photo_path: x.photo_path, touched: eur ? { rate: true, cur: true } : {} };
   enterAnim = 'sheet';
   render();
 }
@@ -1292,15 +1323,21 @@ function openExpense(id) {
 async function saveExpense() {
   const L = T(), x = S.exp;
   if (x.kind === 'km') return saveKm();
-  const amount = Number(String(x.amount).replace(/['’\s]/g, '').replace(',', '.'));
+  const amount = numIn(x.amount), eur = x.cur === 'EUR';
   if (!(amount > 0)) { toast(L.expNeedAmount, true); app.querySelector('[data-exp=amount]')?.focus(); return; }
   if (!x.day) { toast(L.expNeedDate, true); return; }
+  if (eur && !(numIn(x.rate) > 0)) { toast(L.expNeedRate, true); app.querySelector('[data-exp=rate]')?.focus(); return; }
   S.busy = true; render();
   try {
-    const row = { day: x.day, amount: Math.round(amount * 100) / 100, category: x.category, note: (x.note || '').trim() };
+    const orig = Math.round(amount * 100) / 100;
+    const row = { day: x.day, amount: eur ? fxChf(x) : orig, category: x.category, note: (x.note || '').trim(),
+      currency: eur ? 'EUR' : 'CHF', amount_orig: eur ? orig : null, rate: eur ? numIn(x.rate) : null };
     const origDay = x.id ? S.expenses.find((e) => e.id === x.id)?.day : null;
     if (x.id) {
       const { error } = await sb.from('expenses').update(row).eq('id', x.id);
+      if (error) throw error;
+    } else if (!x.url && !x.blob) {
+      const { error } = await sb.from('expenses').insert(row);       // ohne Beleg
       if (error) throw error;
     } else {
       if (!x.blob && x.url) x.blob = await (await fetch(x.url)).blob();
@@ -1537,6 +1574,8 @@ app.addEventListener('input', (e) => {
   if (!t.dataset.exp || !S.exp) return;
   S.exp[t.dataset.exp] = t.value;
   S.exp.touched = { ...S.exp.touched, [t.dataset.exp]: true };
+  if (S.exp.cur === 'EUR' && /^(amount|rate)$/.test(t.dataset.exp)) refreshFx();
+  if (S.exp.cur === 'EUR' && t.dataset.exp === 'day') { S.exp.touched.rate = false; loadRate(); }
   if (S.exp.kind === 'km') {
     if (t.dataset.exp === 'route' && !S.exp.touched.km) {
       // bekannte Strecke: Kilometer vom letzten Mal übernehmen
@@ -1670,6 +1709,13 @@ app.addEventListener('click', async (e) => {
   else if (a === 'expdraft') expenseDraftPdf();
   else if (a === 'expphotos') receiptsPdf();
   else if (a === 'expphoto') photoDownload();
+  else if (a === 'expmanual') { S.exp = { day: dayKey(new Date()), amount: '', cur: 'CHF', rate: '', category: 'essen', note: '', url: null, touched: {} }; enterAnim = 'sheet'; render(); app.querySelector('[data-exp=amount]')?.focus(); }
+  else if (a === 'expcur') {
+    const x = S.exp; if (!x || x.cur === el.dataset.v) return;
+    x.cur = el.dataset.v; x.touched.cur = true;
+    if (x.cur === 'EUR') { x.touched.rate = false; x.rate = ''; x.rateSrc = T().expRateRun; }
+    render(); loadRate(x);
+  }
   else if (a === 'expkm') { S.exp = { kind: 'km', day: dayKey(new Date()), km: '', ret: false, route: '', note: '', touched: {} }; enterAnim = 'sheet'; render(); app.querySelector('[data-exp=route]')?.focus(); }
   else if (a === 'expret') { S.exp.ret = !S.exp.ret; el.classList.toggle('on', S.exp.ret); refreshKm(); }
   else if (a === 'arch') { S.archTab = el.dataset.v; render(); }
