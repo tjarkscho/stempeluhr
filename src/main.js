@@ -8,6 +8,7 @@ import {
 import { prefs, setPref, applyPrefs, T, label, THEMES } from './i18n.js';
 import { holidayName } from './lib/holidays.js';
 import { legalText } from './lib/legal.js';
+import { applyProfile, withProfile, withProfileSync, nameFromEmail } from './lib/profile.js';
 import { backupSupported, backupState, chooseFolder, runBackup } from './lib/backup.js';
 import { fmtChf as chfOf, vacationAccount, upcomingHolidays, forecastMonthEnd, workStats, timeOfDay } from './lib/extras.js';
 import { parseReceipt, expenseTotals, fmtChf, CATEGORIES, PHOTO_CATS, kmAmount, lastWorkday, cleanRoute } from './lib/receipt.js';
@@ -117,12 +118,17 @@ function toast(msg, err = false) {
 
 // ---------------- Daten ----------------
 // ---------------- Offline: Cache + Warteschlange ----------------
-const QKEY = 'stempeluhr.queue', CKEY = 'stempeluhr.cache';
+// pro Benutzer getrennt (mehrere Konten auf einem Gerät)
+const KEYS = {
+  get Q() { return `stempeluhr.queue.${S.user?.id || 'x'}`; },
+  get C() { return `stempeluhr.cache.${S.user?.id || 'x'}`; },
+  get P() { return `stempeluhr.profile.${S.user?.id || 'x'}`; },
+};
 const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* voll/gesperrt */ } };
 const isNetErr = (e) => !navigator.onLine || /fetch|network|load failed|timeout/i.test(e?.message || String(e));
 
-function queue() { return lsGet(QKEY, []); }
+function queue() { return lsGet(KEYS.Q, []); }
 function setEntries(serverRows) {
   // ausstehende Offline-Stempel sichtbar mitführen
   const pending = queue().map((r, i) => ({ id: `q${i}`, ...r, manual: false, pending: true }));
@@ -130,10 +136,10 @@ function setEntries(serverRows) {
   S.byDay = groupByDay(S.entries);
 }
 function saveCache() {
-  lsSet(CKEY, { entries: S.entries.filter((e) => !e.pending), absences: [...S.absences], reports: S.reports });
+  lsSet(KEYS.C, { entries: S.entries.filter((e) => !e.pending), absences: [...S.absences], reports: S.reports });
 }
 function loadCache() {
-  const c = lsGet(CKEY, null);
+  const c = lsGet(KEYS.C, null);
   if (!c) return false;
   setEntries(c.entries || []); S.absences = new Map(c.absences || []); S.reports = c.reports || [];
   return true;
@@ -146,7 +152,7 @@ async function flushQueue() {
   const { error } = await sb.from('entries').insert(q);
   flushing = false;
   if (error) return;
-  lsSet(QKEY, []);
+  lsSet(KEYS.Q, []);
   await loadEntries().catch(() => {});
   toast(T().synced(q.length));
 }
@@ -184,8 +190,31 @@ function syncLang(byUser = false) {
   }
 }
 
+// ---- Profil (Name, Zählbeginn, Ferien, Admin) ----
+function setProfile(p) {
+  S.profile = p;
+  applyProfile(p || { email: S.user?.email, name: nameFromEmail(S.user?.email) });
+}
+async function loadProfile() {
+  const { data, error } = await sb.from('profiles').select('*').eq('user_id', S.user.id).maybeSingle();
+  if (error) throw error;
+  setProfile(data);
+  lsSet(KEYS.P, data);
+}
+// alte Speicherstände (vor Mehrbenutzer) dem ersten Konto auf diesem Gerät zuordnen
+function migrateKeys() {
+  for (const [old, now] of [['stempeluhr.queue', KEYS.Q], ['stempeluhr.cache', KEYS.C]]) {
+    try { const v = localStorage.getItem(old); if (v != null) { if (localStorage.getItem(now) == null) localStorage.setItem(now, v); localStorage.removeItem(old); } } catch { /* egal */ }
+  }
+}
+
 async function loadAll() {
   syncLang();
+  migrateKeys();
+  const cachedProfile = lsGet(KEYS.P, null);
+  setProfile(cachedProfile);
+  if (!cachedProfile) { try { await loadProfile(); } catch (e) { console.warn('Profil', e); } }
+  else loadProfile().then(render).catch(() => {});
   loadCache();
   const hadCache = S.entries.length > 0;
   countUpNext = hadCache;                     // mit Cache sofort hochzählen, sonst nach dem Laden
@@ -246,7 +275,7 @@ function viewPrompt() {
 }
 
 // Saldo-Wert in Stunden oder Franken (Einstellung)
-const inChf = () => prefs.money === 'chf';
+const inChf = () => prefs.money === 'chf' && CONFIG.hourlyRate > 0;
 const balTxt = (m) => (inChf() ? chfOf(m) : fmtMin(m, true));
 const balB = (m, extra = '') => `<b class="${m < 0 ? 'neg' : m > 0 ? 'pos' : ''}" data-count="${m}" data-signed="1" ${inChf() ? 'data-chf="1"' : ''}${extra}>${balTxt(m)}</b>`;
 
@@ -348,7 +377,7 @@ async function stamp(kinds) {
   const lastKind = kinds[kinds.length - 1];
   if (error) {
     // offline -> lokal merken, später hochladen
-    lsSet(QKEY, [...queue(), ...rows]);
+    lsSet(KEYS.Q, [...queue(), ...rows]);
     setEntries(S.entries.filter((e) => !e.pending));
     render();
     return fb ? feierabend(fb, ts) : confirmStamp(lastKind, ts, true);
@@ -569,7 +598,7 @@ function viewStats(L) {
     ${tile(SYM(SY.enter), L.stAvgIn, tm(st.avgIn))}
     ${st.avgOut != null ? tile(SYM(SY.leave), L.stAvgOut, tm(st.avgOut)) : ''}
   </div>
-  <div class="stats stats-x one">${tile(SYM(SY.coin), L.stChf, `<span class="${saldo < 0 ? 'neg' : 'pos'}">${chfOf(saldo)}</span>`, `${fmtMin(saldo, true)} · ${L.stChfSub(CONFIG.hourlyRate.toFixed(2))}`)}</div>`;
+  ${CONFIG.hourlyRate > 0 ? `<div class="stats stats-x one">${tile(SYM(SY.coin), L.stChf, `<span class="${saldo < 0 ? 'neg' : 'pos'}">${chfOf(saldo)}</span>`, `${fmtMin(saldo, true)} · ${L.stChfSub(CONFIG.hourlyRate.toFixed(2))}`)}</div>` : ''}`;
 }
 
 // ---------------- Ring ----------------
@@ -727,7 +756,7 @@ async function saveFile(bytes, name, type = 'application/pdf') {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
-async function periodPdf(key) {
+async function periodPdf(key, D = S) {
   if (S.busy) return;
   S.busy = true; render();
   try {
@@ -736,8 +765,8 @@ async function periodPdf(key) {
     const logo = await getLogo();
     let bytes, name;
     if (key.length === 7) {
-      const st = rangeStats(`${key}-01`, lastOfMonth(key), S.byDay, S.absences, now);
-      bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), S.byDay, S.absences, now), logo, pdfLang());
+      const st = rangeStats(`${key}-01`, lastOfMonth(key), D.byDay, D.absences, now);
+      bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), D.byDay, D.absences, now), logo, pdfLang());
       name = `${T().fileMonth}_${key}.pdf`;
     } else {
       const months = [];
@@ -1039,8 +1068,8 @@ function prefsControls() {
   return `<div class="prefs">
     <span class="plabel">${L.language}</span>
     ${seg('lang', ['de', 'fr'], (v) => v.toUpperCase())}
-    ${S.user ? `<span class="plabel">${L.money}</span>
-    ${seg('money', ['time', 'chf'], (v) => (v === 'chf' ? `${L.moneyChf} (${CONFIG.hourlyRate.toFixed(2)})` : L.moneyTime))}
+    ${S.user ? `${CONFIG.hourlyRate > 0 ? `<span class="plabel">${L.money}</span>` : ''}
+    ${CONFIG.hourlyRate > 0 ? seg('money', ['time', 'chf'], (v) => (v === 'chf' ? `${L.moneyChf} (${CONFIG.hourlyRate.toFixed(2)})` : L.moneyTime)) : ''}
     <span class="plabel">${L.gauge}</span>
     ${seg('gauge', ['ring', 'glas', 'zeit', 'schlicht'], (v) => L.gauges[v])}` : ''}
     ${S.user ? `<span class="plabel">${L.reminder}</span>
@@ -1063,6 +1092,8 @@ function viewSettings() {
     <span class="plabel">${G.sources}</span>
     <div class="legal-links">${G.links.map(([t, u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(t)}</a>`).join('')}</div>
   </div></div>`;
+  if (S.settings === 'admin') return viewAdmin();
+  if (S.settings === 'admuser') return viewAdmUser();
   if (S.settings === 'auto') {
     const L = T(), base = location.origin + location.pathname;
     const link = (k, u) => `<div class="autolink"><span>${k}</span><code>${esc(u)}</code><button type="button" class="btn ghost" data-act="copylink" data-url="${esc(u)}">⧉</button></div>`;
@@ -1079,11 +1110,202 @@ function viewSettings() {
       <div class="bk-box"><span>${b?.dir ? L.bkFolder(esc(b.name)) : L.bkHint}</span>${b?.dir ? `<small>${b.last ? L.bkLast(fmtDate(dayKey(new Date(b.last)))) : L.bkNever}</small>` : ''}
       <div class="bk-btns">${b?.dir ? `<button type="button" class="btn" data-act="backup" ${S.busy ? 'disabled' : ''}>${L.bkNow}</button>` : ''}
       <button type="button" class="btn ghost" data-act="bkfolder">${L.bkChoose}</button></div></div></div>`; })() : ''}
+    ${viewProfileBox()}
+    ${S.profile?.is_admin ? `<div class="prefs"><span class="plabel">${T().admTitle}</span>
+    <button type="button" class="toggle navrow" data-act="admin"><span>${T().admRow}</span>${ICON.next}</button></div>` : ''}
     <div class="prefs"><span class="plabel">${T().autoTitle}</span>
     <button type="button" class="toggle navrow" data-act="auto"><span>${T().autoRow}</span>${ICON.next}</button></div>
     <div class="prefs"><span class="plabel">${G.title}</span>
     <button type="button" class="toggle navrow" data-act="legal"><span>${G.rowText}</span>${ICON.next}</button></div>
   </div></div>`;
+}
+
+// ---------------- Konto: Passwort beim ersten Anmelden ----------------
+function viewSetPw() {
+  const L = T();
+  return `<div class="login-wrap">
+    <img class="login-logo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" />
+    <form class="login" id="setpw" novalidate>
+      <h1>${L.pwNewTitle}</h1>
+      <p class="pw-info">${L.pwNewInfo(esc(S.user?.email || ''))}</p>
+      <label class="fld"><span>${L.pwNew}</span><span class="pw"><input type="password" name="pw1" autocomplete="new-password" minlength="8" required />
+        <button type="button" class="pw-eye" data-act="pweye" aria-label="${L.showPw}">${ICON.eye}</button></span></label>
+      <label class="fld"><span>${L.pwRepeat}</span><input type="password" name="pw2" autocomplete="new-password" minlength="8" required /></label>
+      <button class="btn login-btn" ${S.busy ? 'disabled' : ''}>${L.pwSave}</button>
+      ${S.loginErr ? `<p class="login-err">${esc(S.loginErr)}</p>` : ''}
+      <button type="button" class="link" data-act="logout">${L.logout}</button>
+    </form>
+  </div>`;
+}
+async function submitNewPw(f) {
+  const L = T(), a = String(f.get('pw1') || ''), b = String(f.get('pw2') || '');
+  S.loginErr = a.length < 8 ? L.pwShort : a !== b ? L.pwMismatch : null;
+  if (S.loginErr) return render();
+  S.busy = true; render();
+  try {
+    const { error } = await sb.auth.updateUser({ password: a });
+    if (error) throw error;
+    const r = await sb.rpc('finish_setup');
+    if (r.error) throw r.error;
+    await loadProfile();
+    S.busy = false; S.loginErr = null;
+    await loadAll();
+    toast(L.pwSaved);
+  } catch (e) {
+    S.busy = false;
+    S.loginErr = /different|same/i.test(e.message || '') ? L.pwSame : L.error + (e.message || e);
+    render();
+  }
+}
+
+// ---------------- Profil (eigene Angaben) ----------------
+function viewProfileBox() {
+  const L = T(), p = S.profile;
+  if (!p) return '';
+  return `<div class="prefs"><span class="plabel">${L.profTitle}</span>
+    <label class="fld"><span>${L.profName}</span><input data-prof="name" maxlength="60" value="${esc(p.name || '')}" /></label>
+    <div class="exp-grid">
+      <label class="fld"><span>${L.profVac}</span><input data-prof="vacation_days" inputmode="decimal" value="${esc(String(Number(p.vacation_days ?? 20)))}" /></label>
+      <label class="fld"><span>${L.profEntry}</span><input type="date" data-prof="employment_start" value="${esc(p.employment_start || '')}" /></label>
+    </div>
+    <p class="hint">${L.profStart(fmtDate(CONFIG.startDate))}</p></div>`;
+}
+async function saveProfileField(k, v) {
+  const L = T();
+  let val = v.trim();
+  if (k === 'vacation_days') { val = Number(val.replace(',', '.')); if (!(val >= 0 && val <= 60)) return toast(L.profBad, true); }
+  if (k === 'name' && !val) return toast(L.profBad, true);
+  if (k === 'employment_start' && !val) val = null;
+  const { error } = await sb.from('profiles').update({ [k]: val }).eq('user_id', S.user.id);
+  if (error) return toast(L.error + error.message, true);
+  await loadProfile().catch(() => {});
+  toast(L.profSaved);
+  render();
+}
+
+// ---------------- Admin: Benutzer verwalten ----------------
+async function admCall(body) {
+  const { data, error } = await sb.functions.invoke('admin', { body });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context?.json?.(); if (j?.error) msg = j.error; } catch { /* egal */ }
+    throw new Error(msg);
+  }
+  return data;
+}
+async function loadAdmUsers() {
+  const { data, error } = await sb.from('profiles').select('*').order('name');
+  if (error) { toast(T().error + error.message, true); return; }
+  S.admUsers = data;
+  if (S.settings === 'admin') render();
+}
+function viewAdmin() {
+  const L = T(), us = S.admUsers || [];
+  const back = `<div class="sheethead"><button class="icon" data-act="legalback" aria-label="${L.back}">${ICON.prev}</button><b>${L.admTitle}</b><button class="icon" data-act="setclose">${ICON.close}</button></div>`;
+  const neu = S.admNew;
+  return `<div class="modal" data-act="setclose"><div class="sheet legal adm" data-stop="1">${back}
+    ${neu ? `<div class="adm-new"><b>${L.admNewTitle}</b><p class="hint">${L.admNewHint}</p>
+      ${neu.map((x) => `<div class="adm-pw ${x.error ? 'err' : ''}"><span>${esc(x.email)}</span>${x.error ? `<small>${esc(x.error)}</small>` : `<code>${esc(x.password)}</code>`}</div>`).join('')}
+      <div class="bk-btns"><button type="button" class="btn ghost" data-act="admcopy" data-txt="${esc(neu.filter((x) => x.password).map((x) => `${x.email}  ${x.password}`).join('\n'))}">${L.admCopy}</button>
+      <button type="button" class="btn" data-act="admdone">${L.admDone}</button></div></div>` : `
+    <span class="plabel">${L.admAdd}</span>
+    <textarea data-adm="emails" rows="3" placeholder="vorname.name@netpowersafe.ch" autocapitalize="off" autocomplete="off" spellcheck="false">${esc(S.admEmails || '')}</textarea>
+    <p class="hint">${L.admAddHint}</p>
+    <button type="button" class="btn" data-act="admcreate" ${S.busy ? 'disabled' : ''}>${L.admCreate}</button>`}
+    <span class="plabel">${L.admUsers(us.length)}</span>
+    ${S.admUsers ? `<div class="adm-list">${us.map((u) => `<div class="adm-u">
+      <div><b>${esc(u.name || u.email)}${u.is_admin ? ' <em>Admin</em>' : ''}</b><small>${esc(u.email)}</small>
+      <small>${u.must_change ? L.admPending : u.start_date ? L.admSince(fmtDate(u.start_date)) : ''}</small></div>
+      <div class="adm-b">${u.start_date ? `<button type="button" class="btn ghost" data-act="admview" data-id="${u.user_id}">${L.admTimes}</button>` : ''}
+      ${u.user_id !== S.user.id ? `<button type="button" class="link" data-act="admreset" data-id="${u.user_id}">${L.admReset}</button>` : ''}</div>
+    </div>`).join('')}</div>` : `<p class="hint"><i class="spin"></i></p>`}
+  </div></div>`;
+}
+async function admCreate() {
+  const L = T();
+  const emails = [...new Set(String(S.admEmails || '').toLowerCase().split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean))];
+  if (!emails.length) return toast(L.admNoMail, true);
+  const bad = emails.filter((m) => !/^[^@\s]+@netpowersafe\.ch$/.test(m));
+  if (bad.length) return toast(L.admDomain(bad.join(', ')), true);
+  S.busy = true; render();
+  try {
+    const r = await admCall({ action: 'create', emails });
+    S.admNew = r.results; S.admEmails = '';
+  } catch (e) { toast(L.error + e.message, true); }
+  S.busy = false;
+  await loadAdmUsers();
+  render();
+}
+async function admReset(btn) {
+  const L = T();
+  if (!btn.dataset.sure) { btn.dataset.sure = '1'; btn.textContent = L.admResetSure; return; }
+  S.busy = true; render();
+  try {
+    const r = await admCall({ action: 'reset', user_id: btn.dataset.id });
+    S.admNew = [r];
+  } catch (e) { toast(L.error + e.message, true); }
+  S.busy = false;
+  await loadAdmUsers();
+  render();
+}
+async function admView(id) {
+  const u = (S.admUsers || []).find((x) => x.user_id === id);
+  if (!u) return;
+  S.admSel = { profile: u, loading: true }; S.settings = 'admuser'; render();
+  try {
+    const all = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb.from('entries').select('id,kind,ts,manual').eq('user_id', id).order('ts').range(from, from + 999);
+      if (error) throw error;
+      all.push(...data);
+      if (data.length < 1000) break;
+    }
+    const ab = await sb.from('absences').select('day,kind').eq('user_id', id);
+    if (ab.error) throw ab.error;
+    if (S.admSel?.profile !== u) return;
+    S.admSel = { profile: u, byDay: groupByDay(all), absences: new Map(ab.data.map((a) => [a.day, a.kind])) };
+  } catch (e) { toast(T().error + e.message, true); S.admSel = null; S.settings = 'admin'; }
+  render();
+}
+function viewAdmUser() {
+  const L = T(), x = S.admSel, u = x?.profile;
+  const head = `<div class="sheethead"><button class="icon" data-act="admback" aria-label="${L.back}">${ICON.prev}</button><b>${esc(u?.name || '')}</b><button class="icon" data-act="setclose">${ICON.close}</button></div>`;
+  if (!x || x.loading) return `<div class="modal" data-act="setclose"><div class="sheet legal adm" data-stop="1">${head}<p class="hint"><i class="spin"></i></p></div></div>`;
+  const now = new Date(), today = dayKey(now), ym = today.slice(0, 7);
+  const prevYm = dayKey(new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7) - 2, 15))).slice(0, 7);
+  const body = withProfileSync(u, () => {
+    const st = dayStats(x.byDay.get(today) || [], true, now);
+    const evs = x.byDay.get(today) || [];
+    const first = evs.find((e) => e.kind === 'in');
+    const status = st.state === 'break' ? L.admStBreak : st.open ? L.admStIn(first ? hhmm(new Date(first.ts)) : '') : st.total ? L.admStOut(fmtMin(st.total)) : L.admStNone;
+    const w = weekStats(mondayOf(today), x.byDay, x.absences, now);
+    const saldo = saldoAt(addDays(today, -1), x.byDay, x.absences, now);
+    const vac = vacationAccount(+today.slice(0, 4), x.absences);
+    const rows = [];
+    for (let d = today; rows.length < 14 && d >= CONFIG.startDate; d = addDays(d, -1)) {
+      const r = dayRecord(d, x.byDay, x.absences, now);
+      if (!r.in && !r.credit) continue;
+      rows.push(`<tr><td>${fmtDate(d).slice(0, 6)}</td><td>${r.in ? hhmm(r.in) : esc(r.label || '')}</td><td>${r.out ? hhmm(r.out) : r.open ? '…' : ''}</td><td>${fmtMin(r.dayTotal || 0)}</td></tr>`);
+    }
+    return `<div class="adm-stat">
+      <div><span>${L.admToday}</span><b>${status}</b></div>
+      <div><span>${L.admWeek}</span><b>${fmtMin(w.ist)} / ${fmtMin(w.soll)}</b></div>
+      <div><span>${L.balanceTotal}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b></div>
+      <div><span>${L.admVac}</span><b>${String(vac.left).replace('.', ',')} / ${String(vac.entitlement).replace('.', ',')}</b></div>
+    </div>
+    <span class="plabel">${L.admLast}</span>
+    ${rows.length ? `<table class="adm-t"><thead><tr><th>${L.admDate}</th><th>${L.admIn}</th><th>${L.admOut}</th><th>${L.admTotal}</th></tr></thead><tbody>${rows.join('')}</tbody></table>` : `<p class="hint">${L.admNoData}</p>`}
+    <p class="hint">${L.since(fmtDate(CONFIG.startDate))}</p>`;
+  });
+  return `<div class="modal" data-act="setclose"><div class="sheet legal adm" data-stop="1">${head}${body}
+    <div class="bk-btns"><button type="button" class="btn ghost" data-act="admpdf" data-ym="${prevYm}" ${S.busy ? 'disabled' : ''}>${L.admPdf(monthLabel(prevYm))}</button>
+    <button type="button" class="btn ghost" data-act="admpdf" data-ym="${ym}" ${S.busy ? 'disabled' : ''}>${L.admPdf(monthLabel(ym))}</button></div>
+  </div></div>`;
+}
+async function admPdf(ym) {
+  const x = S.admSel;
+  if (!x?.byDay) return;
+  await withProfile(x.profile, () => periodPdf(ym, x));
 }
 
 // ---------------- Spesen ----------------
@@ -1571,6 +1793,7 @@ app.addEventListener('touchend', () => {
 
 app.addEventListener('input', (e) => {
   const t = e.target;
+  if (t.dataset.adm === 'emails') { S.admEmails = t.value; return; }
   if (!t.dataset.exp || !S.exp) return;
   S.exp[t.dataset.exp] = t.value;
   S.exp.touched = { ...S.exp.touched, [t.dataset.exp]: true };
@@ -1622,6 +1845,7 @@ function render() {
     return;
   }
   if (S.locked && lockId()) { app.innerHTML = viewLock(); return; }
+  if (S.profile?.must_change) { app.innerHTML = viewSetPw() + (S.toast ? `<div class="toast ${S.toast.err ? 'err' : ''}">${esc(S.toast.msg)}</div>` : ''); return; }
   const L = T();
   const tab = (v, l) => `<button class="${S.view === v ? 'on' : ''}" data-act="view" data-v="${v}">${l}</button>`;
   // Fokus/Scroll im Editor erhalten
@@ -1646,6 +1870,7 @@ function render() {
 }
 
 app.addEventListener('submit', async (e) => {
+  if (e.target.id === 'setpw') { e.preventDefault(); return submitNewPw(new FormData(e.target)); }
   if (e.target.id !== 'login') return;
   e.preventDefault();
   const f = new FormData(e.target);
@@ -1663,6 +1888,7 @@ app.addEventListener('submit', async (e) => {
 app.addEventListener('change', (e) => {
   const t = e.target;
   if (t.matches('[data-exp-file]')) { const f = t.files?.[0]; t.value = ''; if (f) newExpense(f); return; }
+  if (t.dataset.prof) { saveProfileField(t.dataset.prof, t.value); return; }
   if (!t.dataset.ed || !S.editor) return;
   S.editor.rows[+t.dataset.i][t.dataset.ed] = t.value;
 });
@@ -1730,7 +1956,15 @@ app.addEventListener('click', async (e) => {
   else if (a === 'settings') { S.settings = true; enterAnim = 'sheet'; render(); }
   else if (a === 'setclose') { S.settings = false; render(); }
   else if (a === 'legal') { S.settings = 'legal'; render(); }
-  else if (a === 'legalback') { S.settings = true; render(); }
+  else if (a === 'admin') { S.settings = 'admin'; render(); loadAdmUsers(); }
+  else if (a === 'admback') { S.settings = 'admin'; S.admSel = null; render(); }
+  else if (a === 'admcreate') admCreate();
+  else if (a === 'admreset') admReset(el);
+  else if (a === 'admview') admView(el.dataset.id);
+  else if (a === 'admpdf') admPdf(el.dataset.ym);
+  else if (a === 'admcopy') { navigator.clipboard?.writeText(el.dataset.txt || '').then(() => toast(T().admCopied)).catch(() => {}); }
+  else if (a === 'admdone') { S.admNew = null; render(); }
+  else if (a === 'legalback') { S.settings = true; S.admSel = null; render(); }
   else if (a === 'pweye') { const i = el.parentElement.querySelector('input'); i.type = i.type === 'password' ? 'text' : 'password'; el.classList.toggle('on'); }
   else if (a === 'push') togglePush();
   else if (a === 'bio') toggleBio();
@@ -1863,7 +2097,7 @@ function hideSplash() {
 sb.auth.onAuthStateChange((_ev, session) => {
   const was = S.user?.id;
   S.user = session?.user || null;
-  if (!S.user) S.locked = false;
+  if (!S.user) { S.locked = false; S.profile = null; S.admUsers = null; S.admSel = null; S.admNew = null; }
   if (S.user && S.user.id !== was) { loadAll(); if (S.locked) unlock(); }
   else render();
   hideSplash();
