@@ -1120,6 +1120,9 @@ function viewSettings() {
   </div></div>`;
 }
 
+// Datumsfeld: echtes iOS-Datumsfeld (unsichtbarer Text) + eigene Anzeige darüber -> sieht überall gleich aus
+const dateIn = (attrs, val) => `<span class="datebox"><input type="date" ${attrs} value="${esc(val || '')}" /><span class="dv">${val ? fmtDate(val) : '–'}</span></span>`;
+
 // ---------------- Konto: Passwort beim ersten Anmelden ----------------
 function viewSetPw() {
   const L = T();
@@ -1166,7 +1169,7 @@ function viewProfileBox() {
     <label class="fld"><span>${L.profName}</span><input data-prof="name" maxlength="60" value="${esc(p.name || '')}" /></label>
     <div class="exp-grid">
       <label class="fld"><span>${L.profVac}</span><input data-prof="vacation_days" inputmode="decimal" value="${esc(String(Number(p.vacation_days ?? 20)))}" /></label>
-      <label class="fld"><span>${L.profEntry}</span><input type="date" data-prof="employment_start" value="${esc(p.employment_start || '')}" /></label>
+      <label class="fld"><span>${L.profEntry}</span>${dateIn('data-prof="employment_start"', p.employment_start)}</label>
     </div>
     <p class="hint">${L.profStart(fmtDate(CONFIG.startDate))}</p></div>`;
 }
@@ -1404,7 +1407,7 @@ function viewKmSheet() {
       <datalist id="km-routes">${routes.map((r) => `<option value="${esc(r)}"></option>`).join('')}</datalist></label>
     <div class="exp-grid">
       <label class="fld"><span>${L.expKmField}</span><input data-exp="km" inputmode="decimal" value="${esc(x.km ?? '')}" placeholder="0" /></label>
-      <label class="fld"><span>${L.expDate}</span><input type="date" data-exp="day" value="${esc(x.day)}" max="${dayKey(new Date())}" /></label>
+      <label class="fld"><span>${L.expDate}</span>${dateIn(`data-exp="day" max="${dayKey(new Date())}"`, x.day)}</label>
     </div>
     <button type="button" class="toggle ${x.ret ? 'on' : ''}" data-act="expret"><span>${L.expReturn}</span><i></i></button>
     <div class="km-calc"><span class="km-formula">${kmFormula()}</span><b class="km-amt">CHF ${fmtChf(kmTotal().amount)}</b></div>
@@ -1442,7 +1445,7 @@ function viewExpSheet() {
     <div class="exp-grid">
       <label class="fld"><span class="amt-l">${L.expAmountIn}<span class="cur" role="group">${['CHF', 'EUR'].map((c) => `<button type="button" class="${(x.cur || 'CHF') === c ? 'on' : ''}" data-act="expcur" data-v="${c}">${c}</button>`).join('')}</span></span>
         <input data-exp="amount" inputmode="decimal" enterkeyhint="done" value="${esc(x.amount ?? '')}" placeholder="0.00" /></label>
-      <label class="fld"><span>${L.expDate}</span><input type="date" data-exp="day" value="${esc(x.day)}" max="${dayKey(new Date())}" /></label>
+      <label class="fld"><span>${L.expDate}</span>${dateIn(`data-exp="day" max="${dayKey(new Date())}"`, x.day)}</label>
     </div>
     ${x.cur === 'EUR' ? `<div class="km-calc fx"><label class="fx-rate"><span>${L.expRate}</span><input data-exp="rate" inputmode="decimal" value="${esc(x.rate ?? '')}" placeholder="…" /></label><b class="fx-amt">${fxLine()}</b></div>
     <p class="fx-src">${esc(x.rateSrc || '')}</p>` : ''}
@@ -1497,7 +1500,7 @@ function newExpense(file) {
     if (!sh) return;
     const a = sh.querySelector('[data-exp=amount]'), d = sh.querySelector('[data-exp=day]');
     if (!exp.touched.amount && a) a.value = exp.amount;
-    if (!exp.touched.day && d) d.value = exp.day;
+    if (!exp.touched.day && d) { d.value = exp.day; const dv = d.nextElementSibling; if (dv?.classList.contains('dv')) dv.textContent = fmtDate(exp.day); }
     const st = sh.querySelector('.exp-ocr');
     if (st) { st.className = `exp-ocr ${exp.ocr}`; st.innerHTML = `<span>${exp.ocr === 'ok' ? T().expOcrOk : T().expOcrFail}</span>`; }
     if (exp.ocr === 'ok') a?.classList.add('flash');
@@ -1793,6 +1796,7 @@ app.addEventListener('touchend', () => {
 
 app.addEventListener('input', (e) => {
   const t = e.target;
+  if (t.type === 'date' && t.nextElementSibling?.classList.contains('dv')) t.nextElementSibling.textContent = t.value ? fmtDate(t.value) : '–';
   if (t.dataset.adm === 'emails') { S.admEmails = t.value; return; }
   if (!t.dataset.exp || !S.exp) return;
   S.exp[t.dataset.exp] = t.value;
@@ -1887,6 +1891,7 @@ app.addEventListener('submit', async (e) => {
 
 app.addEventListener('change', (e) => {
   const t = e.target;
+  if (t.type === 'date' && t.nextElementSibling?.classList.contains('dv')) t.nextElementSibling.textContent = t.value ? fmtDate(t.value) : '–';
   if (t.matches('[data-exp-file]')) { const f = t.files?.[0]; t.value = ''; if (f) newExpense(f); return; }
   if (t.dataset.prof) { saveProfileField(t.dataset.prof, t.value); return; }
   if (!t.dataset.ed || !S.editor) return;
