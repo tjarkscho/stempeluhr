@@ -291,7 +291,7 @@ export function applyPrefs() {
   // Icons passend zum Farbschema
   const base = import.meta.env.BASE_URL;
   document.querySelector('link[rel="icon"]')?.setAttribute('href', `${base}favicon-${icon}.png?v=5`);
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-weiss.png?v=6`);   // Home-Icon immer weiss: iOS dunkelt es im Dunkelmodus selbst ab
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-glas.png?v=7`);   // Home-Icon: rotes Logo ohne Hintergrund, iOS passt hell/dunkel an
 }
 
 /** Aktuelles Wörterbuch */
