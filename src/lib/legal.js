@@ -7,20 +7,21 @@ const h = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}
 const chf = (v) => v.toFixed(2);
 const S = CONFIG.surcharge;
 const soll = CONFIG.sollDayMin;
-const start = CONFIG.startDate.split('-').reverse().join('.');
+const startOf = () => CONFIG.startDate.split('-').reverse().join('.');
 
+const ADMIN = 'Marian Tjark Schomburg';
 const ARG = { de: 'https://www.fedlex.admin.ch/eli/cc/1966/57_57_57/de', fr: 'https://www.fedlex.admin.ch/eli/cc/1966/57_57_57/fr' };
 const OR = { de: 'https://www.fedlex.admin.ch/eli/cc/27/317_321_377/de', fr: 'https://www.fedlex.admin.ch/eli/cc/27/317_321_377/fr' };
 
 // Jeder Abschnitt: [Titel, [Absätze]] – Absätze sind reiner Text (wird escaped)
-const DE = {
+const DE = () => ({
   title: 'Legal',
   rowText: 'Rechtliches & wie gerechnet wird',
   intro: 'Persönliches Hilfsmittel zur Zeiterfassung. Massgebend sind dein Arbeitsvertrag mit ' + CONFIG.company + ' und das Schweizer Recht. Keine Rechtsberatung – bei Unklarheiten bei NPS nachfragen.',
   sections: [
     ['Sollzeit & Saldo', [
       `Sollzeit: ${h(soll * 5)} pro Woche, Montag bis Freitag je ${h(soll)} (Arbeitsvertrag).`,
-      `Gezählt wird ab ${start} mit Startsaldo 0:00.`,
+      `Gezählt wird ab ${startOf()} mit Startsaldo 0:00.`,
       'Saldo = gearbeitete Zeit + Gutschriften + Zuschläge − Sollzeit. Der laufende Tag zählt erst nach dem Ausstempeln fest, vorher live.',
     ]],
     ['Pausen', [
@@ -53,7 +54,7 @@ const DE = {
       'Gesetzlicher Ferienanspruch: mindestens 4 Wochen pro Jahr, bis 20 Jahre 5 Wochen (OR Art. 329a). Massgebend ist dein Vertrag.',
     ]],
     ['Anzeigen & Prognose', [
-      `Saldo in Franken: Saldo in Stunden × Stundenlohn CHF ${chf(CONFIG.hourlyRate)} – nur zur Orientierung, Überstunden werden 1:1 mit Freizeit kompensiert.`,
+      CONFIG.hourlyRate > 0 && `Saldo in Franken: Saldo in Stunden × Stundenlohn CHF ${chf(CONFIG.hourlyRate)} – nur zur Orientierung, Überstunden werden 1:1 mit Freizeit kompensiert.`,
       'Prognose Monatsende: aktueller Saldo + Durchschnitt der letzten bis zu 10 Arbeitstage × verbleibende Arbeitstage. Erst ab 3 Arbeitstagen.',
       'Brückentag-Hinweis: Fällt ein Feiertag auf Dienstag oder Donnerstag, wird der Tag dazwischen als möglicher Brückentag angezeigt.',
     ]],
@@ -74,7 +75,9 @@ const DE = {
       'Downloads werden immer frisch in der gewählten Sprache erstellt.',
     ]],
     ['Daten & Sicherheit', [
-      'Deine Daten liegen in deiner eigenen Datenbank (Supabase); nur dein Konto hat Zugriff.',
+      'Deine Daten liegen in einer Datenbank (Supabase). Jedes Konto sieht nur seine eigenen Zeiten, Abwesenheiten und Spesen.',
+      `Ausnahme Admin (${ADMIN}): kann Zeiten und Abwesenheiten aller Benutzer einsehen, Konten anlegen und Passwörter zurücksetzen. Spesen und Belegfotos sieht der Admin nicht.`,
+      'Zugang nur mit einer @netpowersafe.ch-Adresse und auf Einladung. Beim ersten Anmelden und nach einem Zurücksetzen muss ein eigenes Passwort gewählt werden.',
       'Face ID läuft über das Gerät (WebAuthn) – biometrische Daten verlassen das iPhone nie.',
       'Monatliche Sicherung (nur am PC): Stempel, Tage, Abwesenheiten und Spesen als CSV in einen Ordner deiner Wahl.',
     ]],
@@ -87,9 +90,9 @@ const DE = {
   ],
   sources: 'Gesetze',
   links: [['Arbeitsgesetz (ArG, SR 822.11)', ARG.de], ['Obligationenrecht (OR, SR 220)', OR.de]],
-};
+});
 
-const FR = {
+const FR = () => ({
   title: 'Légal',
   rowText: 'Aspects juridiques & mode de calcul',
   intro: 'Outil personnel de saisie du temps. Font foi ton contrat de travail avec ' + CONFIG.company + ' et le droit suisse. Pas un conseil juridique – en cas de doute, demande à NPS.',
@@ -129,7 +132,7 @@ const FR = {
       'Droit légal aux vacances : au moins 4 semaines par an, 5 semaines jusqu’à 20 ans (CO art. 329a). Ton contrat fait foi.',
     ]],
     ['Affichage & prévision', [
-      `Solde en francs : solde en heures × salaire horaire CHF ${chf(CONFIG.hourlyRate)} – à titre indicatif, les heures supplémentaires sont compensées 1:1 en temps.`,
+      CONFIG.hourlyRate > 0 && `Solde en francs : solde en heures × salaire horaire CHF ${chf(CONFIG.hourlyRate)} – à titre indicatif, les heures supplémentaires sont compensées 1:1 en temps.`,
       'Prévision fin de mois : solde actuel + moyenne des 10 derniers jours ouvrables au plus × jours ouvrables restants. Dès 3 jours ouvrables.',
       'Pont : si un jour férié tombe un mardi ou un jeudi, le jour intermédiaire est signalé comme pont possible.',
     ]],
@@ -150,7 +153,9 @@ const FR = {
       'Les téléchargements sont toujours générés à neuf dans la langue choisie.',
     ]],
     ['Données & sécurité', [
-      'Tes données sont dans ta propre base de données (Supabase) ; seul ton compte y a accès.',
+      'Tes données sont dans une base de données (Supabase). Chaque compte ne voit que ses propres heures, absences et frais.',
+      `Exception admin (${ADMIN}) : peut consulter les heures et absences de tous les utilisateurs, créer des comptes et réinitialiser les mots de passe. L’admin ne voit pas les frais ni les photos de tickets.`,
+      'Accès uniquement avec une adresse @netpowersafe.ch et sur invitation. À la première connexion et après une réinitialisation, il faut choisir un mot de passe personnel.',
       'Face ID passe par l’appareil (WebAuthn) – les données biométriques ne quittent jamais l’iPhone.',
       'Sauvegarde mensuelle (PC uniquement) : timbrages, jours, absences et frais en CSV dans un dossier de ton choix.',
     ]],
@@ -163,6 +168,9 @@ const FR = {
   ],
   sources: 'Lois',
   links: [['Loi sur le travail (LTr, RS 822.11)', ARG.fr], ['Code des obligations (CO, RS 220)', OR.fr]],
-};
+});
 
-export const legalText = (lang) => (lang === 'fr' ? FR : DE);
+export const legalText = (lang) => {
+  const g = lang === 'fr' ? FR() : DE();
+  return { ...g, sections: g.sections.map(([t, ps]) => [t, ps.filter(Boolean)]) };
+};
