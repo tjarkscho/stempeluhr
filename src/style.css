@@ -723,3 +723,8 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
 .adm-t th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
 .adm-t td { padding: 7px 6px; border-bottom: 1px solid var(--line); }
 .adm-t td:last-child, .adm-t th:last-child { text-align: right; }
+/* iOS: Datumsfeld nicht breiter als die Spalte (sonst scrollt das Blatt seitlich) */
+.exp-grid > * { min-width: 0; }
+.exp-grid input[type="date"] { -webkit-appearance: none; appearance: none; display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; text-align: left; }
+.exp-grid input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+.sheet { overflow-x: hidden; }
