@@ -48,7 +48,14 @@ const DE = {
     ['Feiertage & Abwesenheiten', [
       `Bezahlte freie Tage (Vertrag, Kanton Waadt): Neujahr, Berchtoldstag, Karfreitag, Ostermontag, Tag der Arbeit, Auffahrt, Pfingstmontag, Bundesfeier, Bettagsmontag, Weihnachten, Stephanstag – je ${h(soll)} gutgeschrieben, wenn sie auf Mo–Fr fallen.`,
       `Ferien und Krankheit: ${h(soll)} pro Tag, halber Ferientag ${h(soll / 2)}.`,
+      `Ferienkonto: ${CONFIG.vacationDays} Tage pro Jahr (Vertrag), im Eintrittsjahr anteilig ab Eintrittsmonat, auf ½ Tag gerundet. Geplante (zukünftige) Ferien werden schon abgezogen.`,
+      'Betriebsferien zwischen Weihnachten und Neujahr werden im Ferienkonto separat angezeigt – wie sie verrechnet werden, regelt NPS.',
       'Gesetzlicher Ferienanspruch: mindestens 4 Wochen pro Jahr, bis 20 Jahre 5 Wochen (OR Art. 329a). Massgebend ist dein Vertrag.',
+    ]],
+    ['Anzeigen & Prognose', [
+      `Saldo in Franken: Saldo in Stunden × Stundenlohn CHF ${chf(CONFIG.hourlyRate)} – nur zur Orientierung, Überstunden werden 1:1 mit Freizeit kompensiert.`,
+      'Prognose Monatsende: aktueller Saldo + Durchschnitt der letzten bis zu 10 Arbeitstage × verbleibende Arbeitstage. Erst ab 3 Arbeitstagen.',
+      'Brückentag-Hinweis: Fällt ein Feiertag auf Dienstag oder Donnerstag, wird der Tag dazwischen als möglicher Brückentag angezeigt.',
     ]],
     ['Korrekturen', [
       'Nachträglich geänderte oder erfasste Zeiten werden mit * „manuell korrigiert“ markiert – in der App und in allen PDFs.',
@@ -56,6 +63,9 @@ const DE = {
     ['Spesen', [
       `Privatauto: CHF ${chf(CONFIG.kmRate)} pro km (Vereinbarung mit NPS). Betrag = km × Satz, auf den Rappen genau.`,
       'Auslagen werden nach Beleg ersetzt (OR Art. 327a). Fotos bleiben in der App abrufbar; Originalbelege aufbewahren, bis abgerechnet ist.',
+      'Spesen in Euro: Steht € oder EUR auf dem Bon, stellt die App automatisch auf EUR um. Umgerechnet wird mit dem EZB-Referenzkurs vom Belegdatum (am Wochenende der letzte Kurs davor). Den Kurs kannst du anpassen, z. B. auf den Kurs deiner Kreditkartenabrechnung.',
+      'Im Spesenblatt steht immer der Betrag in CHF; bei Euro-Belegen zusätzlich klein „EUR Betrag x Kurs“, damit die Umrechnung nachvollziehbar ist.',
+      'Spesen ohne Beleg (z. B. Parkuhr) lassen sich mit „Ohne Beleg“ erfassen und sind im Spesenblatt so markiert. Ob NPS sie ohne Quittung ersetzt, entscheidet der Arbeitgeber.',
       'Das Spesenblatt entsteht automatisch am letzten Werktag des Monats und wird bei späteren Änderungen neu erstellt.',
     ]],
     ['Nachweise', [
@@ -66,7 +76,13 @@ const DE = {
     ['Daten & Sicherheit', [
       'Deine Daten liegen in deiner eigenen Datenbank (Supabase); nur dein Konto hat Zugriff.',
       'Face ID läuft über das Gerät (WebAuthn) – biometrische Daten verlassen das iPhone nie.',
-      'Die Erinnerung um 18:00 kommt nur, wenn du dann noch eingestempelt bist.',
+      'Monatliche Sicherung (nur am PC): Stempel, Tage, Abwesenheiten und Spesen als CSV in einen Ordner deiner Wahl.',
+    ]],
+    ['Erinnerungen', [
+      'Um 18:00 kommt eine Nachricht, wenn du dann noch eingestempelt bist.',
+      'Nach 5½ Stunden Arbeit ohne Pause kommt eine Erinnerung (ab da sind 15 Min. Pause Pflicht).',
+      'Hat deine Pause 30 Minuten erreicht, kommt eine Nachricht. Beide höchstens einmal pro Einsatz, mit max. 1 Minute Verzögerung.',
+      'iPhone-Kurzbefehl beim Ankommen: Die App fragt nach, ob du einstempeln willst – sie stempelt nie von selbst.',
     ]],
   ],
   sources: 'Gesetze',
@@ -108,7 +124,14 @@ const FR = {
     ['Jours fériés & absences', [
       `Jours libres payés (contrat, canton de Vaud) : Nouvel An, Saint-Berthold, Vendredi saint, Lundi de Pâques, Fête du travail, Ascension, Lundi de Pentecôte, Fête nationale, Lundi du Jeûne, Noël, Saint-Étienne – ${h(soll)} crédités s’ils tombent du lundi au vendredi.`,
       `Vacances et maladie : ${h(soll)} par jour, demi-journée de vacances ${h(soll / 2)}.`,
+      `Compte vacances : ${CONFIG.vacationDays} jours par an (contrat), au prorata l’année d’entrée dès le mois d’entrée, arrondi à ½ jour. Les vacances planifiées sont déjà déduites.`,
+      'La fermeture entre Noël et Nouvel An est affichée à part dans le compte vacances – son imputation est réglée par NPS.',
       'Droit légal aux vacances : au moins 4 semaines par an, 5 semaines jusqu’à 20 ans (CO art. 329a). Ton contrat fait foi.',
+    ]],
+    ['Affichage & prévision', [
+      `Solde en francs : solde en heures × salaire horaire CHF ${chf(CONFIG.hourlyRate)} – à titre indicatif, les heures supplémentaires sont compensées 1:1 en temps.`,
+      'Prévision fin de mois : solde actuel + moyenne des 10 derniers jours ouvrables au plus × jours ouvrables restants. Dès 3 jours ouvrables.',
+      'Pont : si un jour férié tombe un mardi ou un jeudi, le jour intermédiaire est signalé comme pont possible.',
     ]],
     ['Corrections', [
       'Les heures modifiées ou saisies après coup sont marquées * « corrigé manuellement » – dans l’app et dans tous les PDF.',
@@ -116,6 +139,9 @@ const FR = {
     ['Frais', [
       `Voiture privée : CHF ${chf(CONFIG.kmRate)} par km (accord avec NPS). Montant = km × taux, au centime près.`,
       'Les frais sont remboursés sur justificatif (CO art. 327a). Les photos restent disponibles dans l’app ; garde les originaux jusqu’au remboursement.',
+      'Frais en euros : si le ticket contient € ou EUR, l’app passe automatiquement en EUR. La conversion utilise le taux de référence BCE du jour du ticket (le week-end, le dernier taux précédent). Le taux est modifiable, p. ex. selon ton relevé de carte de crédit.',
+      'La note de frais indique toujours le montant en CHF ; pour les tickets en euros, en petit « EUR montant x taux » pour que la conversion soit vérifiable.',
+      'Les frais sans ticket (p. ex. parcomètre) se saisissent avec « Sans ticket » et sont marqués ainsi dans la note de frais. Le remboursement sans quittance dépend de l’employeur.',
       'La note de frais est créée automatiquement le dernier jour ouvrable du mois et recréée en cas de modification.',
     ]],
     ['Relevés', [
@@ -126,7 +152,13 @@ const FR = {
     ['Données & sécurité', [
       'Tes données sont dans ta propre base de données (Supabase) ; seul ton compte y a accès.',
       'Face ID passe par l’appareil (WebAuthn) – les données biométriques ne quittent jamais l’iPhone.',
-      'Le rappel de 18:00 n’arrive que si tu es encore timbré à ce moment-là.',
+      'Sauvegarde mensuelle (PC uniquement) : timbrages, jours, absences et frais en CSV dans un dossier de ton choix.',
+    ]],
+    ['Rappels', [
+      'À 18:00, un message arrive si tu es encore timbré.',
+      'Après 5½ h de travail sans pause, un rappel arrive (dès là, 15 min. de pause sont obligatoires).',
+      'Quand ta pause atteint 30 minutes, un message arrive. Les deux au plus une fois par service, avec max. 1 minute de retard.',
+      'Raccourci iPhone à l’arrivée : l’app demande si tu veux timbrer – elle ne timbre jamais toute seule.',
     ]],
   ],
   sources: 'Lois',
