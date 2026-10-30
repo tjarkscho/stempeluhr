@@ -392,8 +392,19 @@ nav button { font-size: 15px; }
 input.flash { animation: flash 1.2s ease-out; }
 @keyframes flash { 0% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--go) 45%, transparent); border-color: var(--go); } }
 .cat-km { --cc: #c2456b; }
-.exp-alt { display: flex; justify-content: center; gap: 8px; margin-top: 4px; }
-.exp-alt .exp-pick { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 10px 12px; font-size: 15px; font-weight: 600; }
+.exp-alt { display: flex; justify-content: center; flex-wrap: wrap; gap: 2px 4px; margin-top: 4px; }
+.amt-l { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.cur { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.cur button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2px 8px; cursor: pointer; }
+.cur button.on { background: var(--accent); color: var(--btntext); }
+.fx { align-items: center; }
+.fx-rate { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.fx-rate input { width: 110px; padding: 8px 10px; font-variant-numeric: tabular-nums; }
+.fx-amt { font-size: 20px; white-space: nowrap; }
+.fx-src { margin: -6px 2px 0; font-size: 12px; color: var(--muted); }
+.exp-list .r small { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+.exp-alt .exp-pick { display: inline-flex; align-items: center; gap: 5px; margin: 0; padding: 10px 7px; font-size: 14.5px; font-weight: 600; white-space: nowrap; }
+.exp-alt .exp-pick svg { width: 19px; height: 19px; }
 .exp-list .thumb.cat-km { color: var(--cc); background: color-mix(in srgb, var(--cc) 12%, var(--card)); }
 .km-calc { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 12px;
   background: color-mix(in srgb, var(--accent) 8%, var(--card)); font-variant-numeric: tabular-nums; }
