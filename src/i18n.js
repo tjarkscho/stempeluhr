@@ -84,7 +84,7 @@ const DICT = {
     vacDays: (y, n) => `Ferientage ${y}: ${n}`,
     theme: 'Farbschema', language: 'Sprache',
     money: 'Saldo anzeigen in', moneyTime: 'Stunden', moneyChf: 'Franken',
-    bgLabel: 'Hintergrund', bgs: { weich: 'Wellen weich', scharf: 'Wellen scharf', klassisch: 'Klassisch' },
+    bgLabel: 'Hintergrund', bgs: { weich: 'Wellen', klassisch: 'Klassisch' },
     bgcLabel: 'Farbe', bgcs: { blau: 'Blau', graphit: 'Graphit', rot: 'Rot' },
     gauge: 'Anzeige Arbeitszeit', gauges: { ring: 'Ring', glas: 'Glas', zeit: 'Zeitleiste', schlicht: 'Schlicht' },
     bkTitle: 'Sicherung auf den PC', bkChoose: 'Ordner wählen', bkNow: 'Jetzt sichern', bkFolder: (n) => `Ordner: ${n}`,
@@ -210,7 +210,7 @@ const DICT = {
     vacDays: (y, n) => `Jours de vacances ${y} : ${n}`,
     theme: 'Thème', language: 'Langue',
     money: 'Afficher le solde en', moneyTime: 'Heures', moneyChf: 'Francs',
-    bgLabel: 'Fond', bgs: { weich: 'Vagues douces', scharf: 'Vagues nettes', klassisch: 'Classique' },
+    bgLabel: 'Fond', bgs: { weich: 'Vagues', klassisch: 'Classique' },
     bgcLabel: 'Couleur', bgcs: { blau: 'Bleu', graphit: 'Graphite', rot: 'Rouge' },
     gauge: 'Affichage du temps', gauges: { ring: 'Anneau', glas: 'Verre', zeit: 'Chronologie', schlicht: 'Sobre' },
     bkTitle: 'Sauvegarde sur le PC', bkChoose: 'Choisir le dossier', bkNow: 'Sauvegarder', bkFolder: (n) => `Dossier : ${n}`,
@@ -266,7 +266,7 @@ export const prefs = {
   theme: 'glas', // immer Glas, hell/dunkel automatisch wie das Gerät
   money: saved.money === 'chf' ? 'chf' : 'time',   // Saldo in Stunden oder Franken
   gauge: ['ring', 'glas', 'zeit', 'schlicht'].includes(saved.gauge) ? saved.gauge : 'ring',   // Darstellung der Arbeitszeit
-  bg: ['weich', 'scharf', 'klassisch'].includes(saved.bg) ? saved.bg : 'weich',             // Hintergrund
+  bg: saved.bg === 'klassisch' ? 'klassisch' : 'weich',             // Hintergrund
   bgc: ['blau', 'graphit', 'rot'].includes(saved.bgc) ? saved.bgc : 'graphit',              // Farbe des Hintergrunds
 };
 
