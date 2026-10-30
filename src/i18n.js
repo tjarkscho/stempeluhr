@@ -290,8 +290,8 @@ export function applyPrefs() {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[theme]);
   // Icons passend zum Farbschema
   const base = import.meta.env.BASE_URL;
-  document.querySelector('link[rel="icon"]')?.setAttribute('href', `${base}favicon-${icon}.png?v=5`);
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-glas.png?v=7`);   // Home-Icon: rotes Logo ohne Hintergrund, iOS passt hell/dunkel an
+  document.querySelector('link[rel="icon"]')?.setAttribute('href', `${base}favicon-rot.png?v=8`);
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-rot.png?v=8`);   // Home-Icon: rot mit weissem Logo
 }
 
 /** Aktuelles Wörterbuch */
