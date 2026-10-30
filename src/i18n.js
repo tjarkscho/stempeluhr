@@ -290,8 +290,8 @@ export function applyPrefs() {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[theme]);
   // Icons passend zum Farbschema
   const base = import.meta.env.BASE_URL;
-  document.querySelector('link[rel="icon"]')?.setAttribute('href', `${base}favicon-${icon}.png?v=4`);
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-${icon}.png?v=4`);
+  document.querySelector('link[rel="icon"]')?.setAttribute('href', `${base}favicon-${icon}.png?v=5`);
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `${base}apple-touch-icon-${icon}.png?v=5`);
 }
 
 /** Aktuelles Wörterbuch */
