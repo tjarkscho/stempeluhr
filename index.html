@@ -37,6 +37,9 @@
       var hr = new Date().getHours();
       document.documentElement.dataset.tod = hr >= 5 && hr < 11 ? 'morgen' : hr < 17 && hr >= 11 ? 'tag' : hr >= 17 && hr < 21 ? 'abend' : 'nacht';
       document.documentElement.dataset.theme = t;
+      var pr = JSON.parse(localStorage.getItem('stempeluhr.prefs') || '{}');
+      if (pr.bg !== 'klassisch') document.documentElement.dataset.bg = pr.bg || 'weich';
+      document.documentElement.dataset.bgc = pr.bgc || 'graphit';
     } catch (e) {}
   </script>
   <style>
