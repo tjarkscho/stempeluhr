@@ -697,3 +697,29 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
 .bk-box small { color: var(--muted); font-size: 12px; }
 .bk-btns { display: flex; gap: 8px; }
 .bk-btns .btn { margin: 4px 0 0; flex: 1; }
+
+/* ---- Konto & Admin ---- */
+.pw-info { margin: -4px 0 4px; color: var(--muted); font-size: 14px; text-align: center; }
+.adm textarea { width: 100%; font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--text); resize: vertical; }
+.adm-new { display: grid; gap: 8px; padding: 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 8%, var(--card)); }
+.adm-new .hint { margin: 0; }
+.adm-pw { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; align-items: baseline; font-size: 14px; }
+.adm-pw span { min-width: 0; overflow-wrap: anywhere; }
+.adm-pw code { white-space: nowrap; font-size: 16px; font-weight: 700; letter-spacing: .02em; user-select: all; }
+.adm-pw.err small { color: var(--neg); }
+.adm-list { display: grid; gap: 8px; }
+.adm-u { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); }
+.adm-u > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.adm-u small { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-u em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); margin-left: 4px; }
+.adm-b { display: grid; gap: 4px; justify-items: end; flex-shrink: 0; }
+.adm-b .btn { padding: 8px 12px; font-size: 14px; }
+.adm-b .link { font-size: 13px; padding: 2px 0; margin: 0; }
+.adm-stat { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.adm-stat > div { display: grid; gap: 2px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+.adm-stat span { font-size: 12.5px; color: var(--muted); }
+.adm-stat b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.adm-t { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.adm-t th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.adm-t td { padding: 7px 6px; border-bottom: 1px solid var(--line); }
+.adm-t td:last-child, .adm-t th:last-child { text-align: right; }
