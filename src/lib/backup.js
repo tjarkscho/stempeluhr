@@ -71,9 +71,10 @@ export async function runBackup({ entries, absences, expenses, byDay }) {
   }
   await write('tage.csv', csv([['Datum', 'Ein', 'Aus', 'Pause', 'Arbeitszeit', 'Zuschlag', 'Total', 'Soll', 'Differenz', 'Bemerkung'], ...days]));
   await write('abwesenheiten.csv', csv([['Datum', 'Art'], ...[...absences].sort(([a], [b]) => a.localeCompare(b))]));
-  await write('spesen.csv', csv([['Datum', 'Kategorie', 'Betrag CHF', 'km', 'Strecke', 'Notiz'],
+  await write('spesen.csv', csv([['Datum', 'Kategorie', 'Betrag CHF', 'Währung', 'Originalbetrag', 'Kurs', 'km', 'Strecke', 'Notiz'],
     ...[...(expenses || [])].sort((a, b) => a.day.localeCompare(b.day))
-      .map((x) => [x.day, x.category, Number(x.amount).toFixed(2), x.km ?? '', x.route || '', x.note || ''])]));
+      .map((x) => [x.day, x.category, Number(x.amount).toFixed(2), x.currency || 'CHF',
+        x.amount_orig != null ? Number(x.amount_orig).toFixed(2) : '', x.rate ?? '', x.km ?? '', x.route || '', x.note || ''])]));
   await kv('last', new Date().toISOString());
   return { folder: `${dir.name}/Stempeluhr_Sicherung_${today}` };
 }
