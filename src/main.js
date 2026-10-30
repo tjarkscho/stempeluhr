@@ -1071,7 +1071,7 @@ function prefsControls() {
     ${S.user ? `${CONFIG.hourlyRate > 0 ? `<span class="plabel">${L.money}</span>` : ''}
     ${CONFIG.hourlyRate > 0 ? seg('money', ['time', 'chf'], (v) => (v === 'chf' ? `${L.moneyChf} (${CONFIG.hourlyRate.toFixed(2)})` : L.moneyTime)) : ''}
     <span class="plabel">${L.bgLabel}</span>
-    ${seg('bg', ['weich', 'scharf', 'klassisch'], (v) => L.bgs[v])}
+    ${seg('bg', ['weich', 'klassisch'], (v) => L.bgs[v])}
     ${prefs.bg !== 'klassisch' ? `<span class="plabel">${L.bgcLabel}</span>
     ${seg('bgc', ['blau', 'graphit', 'rot'], (v) => L.bgcs[v])}` : ''}
     <span class="plabel">${L.gauge}</span>
