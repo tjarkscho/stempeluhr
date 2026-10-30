@@ -1,5 +1,5 @@
 // Service Worker: Offline-Betrieb + Push-Benachrichtigungen
-const CACHE = 'stempeluhr-v4';   // neue Version -> alter Cache (inkl. alter Icons) wird gelöscht
+const CACHE = 'stempeluhr-v5';   // neue Version -> alter Cache (inkl. alter Icons) wird gelöscht
 const SHELL = ['./', './manifest.webmanifest', './logo.png'];
 
 self.addEventListener('install', (e) => {
