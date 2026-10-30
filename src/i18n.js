@@ -84,6 +84,8 @@ const DICT = {
     vacDays: (y, n) => `Ferientage ${y}: ${n}`,
     theme: 'Farbschema', language: 'Sprache',
     money: 'Saldo anzeigen in', moneyTime: 'Stunden', moneyChf: 'Franken',
+    bgLabel: 'Hintergrund', bgs: { weich: 'Wellen weich', scharf: 'Wellen scharf', klassisch: 'Klassisch' },
+    bgcLabel: 'Farbe', bgcs: { blau: 'Blau', graphit: 'Graphit', rot: 'Rot' },
     gauge: 'Anzeige Arbeitszeit', gauges: { ring: 'Ring', glas: 'Glas', zeit: 'Zeitleiste', schlicht: 'Schlicht' },
     bkTitle: 'Sicherung auf den PC', bkChoose: 'Ordner wählen', bkNow: 'Jetzt sichern', bkFolder: (n) => `Ordner: ${n}`,
     bkLast: (d) => `Letzte Sicherung: ${d}`, bkNever: 'Noch keine Sicherung', bkHint: 'Jeden Monat wird automatisch eine Kopie aller Zeiten, Ferien und Spesen (CSV für Excel) in diesen Ordner gespeichert.',
@@ -208,6 +210,8 @@ const DICT = {
     vacDays: (y, n) => `Jours de vacances ${y} : ${n}`,
     theme: 'Thème', language: 'Langue',
     money: 'Afficher le solde en', moneyTime: 'Heures', moneyChf: 'Francs',
+    bgLabel: 'Fond', bgs: { weich: 'Vagues douces', scharf: 'Vagues nettes', klassisch: 'Classique' },
+    bgcLabel: 'Couleur', bgcs: { blau: 'Bleu', graphit: 'Graphite', rot: 'Rouge' },
     gauge: 'Affichage du temps', gauges: { ring: 'Anneau', glas: 'Verre', zeit: 'Chronologie', schlicht: 'Sobre' },
     bkTitle: 'Sauvegarde sur le PC', bkChoose: 'Choisir le dossier', bkNow: 'Sauvegarder', bkFolder: (n) => `Dossier : ${n}`,
     bkLast: (d) => `Dernière sauvegarde : ${d}`, bkNever: 'Pas encore de sauvegarde', bkHint: 'Chaque mois, une copie de toutes les heures, vacances et frais (CSV pour Excel) est enregistrée automatiquement dans ce dossier.',
@@ -262,6 +266,8 @@ export const prefs = {
   theme: 'glas', // immer Glas, hell/dunkel automatisch wie das Gerät
   money: saved.money === 'chf' ? 'chf' : 'time',   // Saldo in Stunden oder Franken
   gauge: ['ring', 'glas', 'zeit', 'schlicht'].includes(saved.gauge) ? saved.gauge : 'ring',   // Darstellung der Arbeitszeit
+  bg: ['weich', 'scharf', 'klassisch'].includes(saved.bg) ? saved.bg : 'weich',             // Hintergrund
+  bgc: ['blau', 'graphit', 'rot'].includes(saved.bgc) ? saved.bgc : 'graphit',              // Farbe des Hintergrunds
 };
 
 // Gerät wechselt hell/dunkel -> sofort übernehmen
@@ -278,6 +284,8 @@ export function applyPrefs() {
     : prefs.theme === 'glas' ? (mq?.matches ? 'glas-dunkel' : 'glas-hell') : prefs.theme;   // Glas: hell/dunkel wie das Gerät
   const icon = ICON_OF[theme] || theme;
   document.documentElement.dataset.theme = theme;
+  if (prefs.bg === 'klassisch') delete document.documentElement.dataset.bg; else document.documentElement.dataset.bg = prefs.bg;
+  document.documentElement.dataset.bgc = prefs.bgc;
   document.documentElement.lang = prefs.lang === 'fr' ? 'fr-CH' : 'de-CH';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[theme]);
   // Icons passend zum Farbschema
