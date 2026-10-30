@@ -51,8 +51,15 @@ export function parseDate(text, today = new Date()) {
   return null;
 }
 
+/** Währung: EUR nur, wenn € / EUR vorkommt und kein CHF / Fr. */
+export function parseCurrency(text) {
+  const s = String(text || '');
+  const eur = (s.match(/€|\bEUR\b|\bEURO\b/gi) || []).length, chf = (s.match(/\bCHF\b|\bSFR\b|\bFr\.\s?\d/gi) || []).length;
+  return eur > chf ? 'EUR' : 'CHF';
+}
+
 export function parseReceipt(text, today = new Date()) {
-  return { amount: parseAmount(text), day: parseDate(text, today) };
+  return { amount: parseAmount(text), day: parseDate(text, today), currency: parseCurrency(text) };
 }
 
 export const CATEGORIES = ['essen', 'fahrt', 'material', 'uebernachtung', 'anderes', 'km'];
