@@ -20,8 +20,10 @@ const kmTxt = (km) => String(Number(km)).replace('.', ',');
 // Rück-Zusatz in der Sprache des Blatts
 const routeIn = (r, t) => cleanRoute(r).replace(/\s*(und zurück|aller-retour)$/i, (m) => (m ? ` ${t.retSuffix}` : ''));
 const descMain = (it, t) => (it.category === 'km' ? routeIn(it.route, t) || t.trip : it.note || '');
-const descSub = (it) => (it.category === 'km'
-  ? [`${kmTxt(it.km)} km x CHF ${fmtChf(CONFIG.kmRate)}`, it.note].filter(Boolean).join(' · ') : '');
+const descSub = (it, t = {}) => (it.category === 'km'
+  ? [`${kmTxt(it.km)} km x CHF ${fmtChf(CONFIG.kmRate)}`, it.note].filter(Boolean).join(' · ')
+  : [it.currency && it.currency !== 'CHF' && it.amount_orig != null ? `${it.currency} ${fmtChf(it.amount_orig)} x ${Number(it.rate).toFixed(4)}` : '',
+    it.photo_path ? '' : t.noReceipt].filter(Boolean).join(' · '));
 
 // Helvetica (WinAnsi) kann nicht alle Zeichen – Unbekanntes ersetzen statt abstürzen
 const safe = (s) => String(s ?? '').replace(/[’‘]/g, "'").replace(/[“”„]/g, '"').replace(/[–—]/g, '-')
@@ -112,7 +114,7 @@ export async function buildExpensePdf(ym, items, photos = new Map(), logo = null
     return lines;
   };
   items.forEach((it, i) => {
-    const main = wrap(descMain(it, t) || '–', 9), sub = descSub(it) ? wrap(descSub(it), 7.5) : [];
+    const main = wrap(descMain(it, t) || '–', 9), sub = descSub(it, t) ? wrap(descSub(it, t), 7.5) : [];
     const rowH = Math.max(20, 9 + main.length * 11 + sub.length * 9.5);
     if (yy - rowH < M + 30) { newPage(); yy = H - M; head(); }
     yy -= rowH;
