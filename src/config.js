@@ -11,5 +11,5 @@ export const CONFIG = {
   // Zuschläge auf gearbeitete Zeit (als Zeitgutschrift). Überstunden Mo–Fr: 1:1
   surcharge: { saturday: 0.25, sunday: 0.5, holiday: 0.5, night: 0.25 },   // Nacht 23–06 Uhr (ArG Art. 17b)
   calendarFrom: 2026,
-  calendarTo: 2029,
+  calendarTo: new Date().getFullYear() + 3,   // Kalender immer 3 Jahre voraus
 };
