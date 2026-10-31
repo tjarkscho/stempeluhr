@@ -75,6 +75,9 @@ export function dayStats(events, isToday, now = new Date()) {
   const segs = [];                       // gearbeitete Abschnitte [von, bis] (für Nacht-/Sonntagszuschlag)
   for (const e of events) {
     const t = new Date(e.ts).getTime();
+    // doppelte Stempel (z. B. offline auf zwei Geräten) überspringen statt Zeit zu verlieren
+    if ((e.kind === 'in' && st !== 'off') || (e.kind === 'out' && st === 'off') ||
+        (e.kind === 'break_start' && st !== 'work') || (e.kind === 'break_end' && st !== 'break')) continue;
     lastT = t;
     if (e.kind === 'in') {
       if (!r.in) { r.in = new Date(t); r.manualIn = !!e.manual; }
@@ -174,6 +177,8 @@ export function dayRecord(day, byDay, absences, now = new Date()) {
   const i = weekday(day);
   const s = dayStats(byDay.get(day), day === today, now);
   const t = dayTargets(day, absences);
+  // ganzer Ferien-/Krankheitstag, aber trotzdem gearbeitet: Gutschrift nur bis zum Tagessoll (nicht doppelt)
+  if ((t.label === 'Ferien' || t.label === 'Krank') && s.total > 0) t.credit = Math.max(0, t.credit - s.total);
   const counted = day >= CONFIG.startDate; // vor Start: nur anzeigen, nicht zählen
   // Zuschlag (Samstag, Sonntag/Feiertag, Nacht) als Zeitgutschrift
   const sc = counted && !s.open ? surchargeOf(s.segs, s.total) : { bonus: 0, nightMin: 0, sundayMin: 0, saturdayMin: 0 };
