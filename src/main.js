@@ -160,7 +160,7 @@ async function flushQueue() {
 async function loadEntries() {
   const all = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from('entries').select('id,kind,ts,manual').order('ts').range(from, from + 999);
+    const { data, error } = await sb.from('entries').select('id,kind,ts,manual').eq('user_id', S.user.id).order('ts').range(from, from + 999);
     if (error) throw error;
     all.push(...data);
     if (data.length < 1000) break;
@@ -169,13 +169,13 @@ async function loadEntries() {
   saveCache();
 }
 async function loadAbsences() {
-  const { data, error } = await sb.from('absences').select('day,kind');
+  const { data, error } = await sb.from('absences').select('day,kind').eq('user_id', S.user.id);
   if (error) throw error;
   S.absences = new Map(data.map((a) => [a.day, a.kind]));
   saveCache();
 }
 async function loadReports() {
-  const { data, error } = await sb.from('weekly_reports').select('*').order('week_start', { ascending: false });
+  const { data, error } = await sb.from('weekly_reports').select('*').eq('user_id', S.user.id).order('week_start', { ascending: false });
   if (error) throw error;
   S.reports = data;
 }
@@ -756,7 +756,7 @@ async function saveFile(bytes, name, type = 'application/pdf') {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
-async function periodPdf(key, D = S) {
+async function periodPdf(key, D = S, prof = null) {
   if (S.busy) return;
   S.busy = true; render();
   try {
@@ -764,6 +764,8 @@ async function periodPdf(key, D = S) {
     const { buildMonthPdf, buildYearPdf } = await import('./lib/pdf-report.js');
     const logo = await getLogo();
     let bytes, name;
+    // PDF eines Kollegen: nur für die Rechnung kurz mit seinem Profil, die App zeichnet so lange nicht neu
+    const build = async () => {
     if (key.length === 7) {
       const st = rangeStats(`${key}-01`, lastOfMonth(key), D.byDay, D.absences, now);
       bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), D.byDay, D.absences, now), logo, pdfLang());
@@ -772,11 +774,14 @@ async function periodPdf(key, D = S) {
       const months = [];
       for (let m = 1; m <= 12; m++) {
         const ym = `${key}-${String(m).padStart(2, '0')}`;
-        months.push({ ym, st: rangeStats(`${ym}-01`, lastOfMonth(ym), S.byDay, S.absences, now), saldo: saldoAt(lastOfMonth(ym), S.byDay, S.absences, now) });
+        months.push({ ym, st: rangeStats(`${ym}-01`, lastOfMonth(ym), D.byDay, D.absences, now), saldo: saldoAt(lastOfMonth(ym), D.byDay, D.absences, now) });
       }
-      bytes = await buildYearPdf(+key, months, rangeStats(`${key}-01-01`, `${key}-12-31`, S.byDay, S.absences, now), saldoAt(`${key}-12-31`, S.byDay, S.absences, now), logo, pdfLang());
+      bytes = await buildYearPdf(+key, months, rangeStats(`${key}-01-01`, `${key}-12-31`, D.byDay, D.absences, now), saldoAt(`${key}-12-31`, D.byDay, D.absences, now), logo, pdfLang());
       name = `${T().fileYear}_${key}.pdf`;
     }
+    };
+    if (prof) { cfgHold++; try { await withProfile(prof, build); } finally { cfgHold--; } }
+    else await build();
     S.busy = false; render();
     await saveFile(bytes, name);
   } catch (e) { S.busy = false; toast(T().pdfError + e.message, true); }
@@ -848,6 +853,23 @@ async function draftPdf() {
 async function generatePdf(monday) {
   S.busy = true; render();
   try {
+    await saveWeekPdf(monday);
+    await loadReports();
+    toast(T().pdfSaved);
+  } catch (e) { toast(T().pdfError + e.message, true); }
+  S.busy = false; render();
+}
+// Nach einer Korrektur: gespeicherte Wochen-PDFs ab dieser Woche still neu erstellen (Saldo zieht sich durch)
+async function refreshWeekPdfs(day) {
+  const m = mondayOf(day);
+  const weeks = S.reports.filter((r) => r.week_start >= m).map((r) => r.week_start).sort();
+  if (!weeks.length) return false;
+  for (const w of weeks) { try { await saveWeekPdf(w); } catch (e) { console.warn('Wochen-PDF', w, e); } }
+  await loadReports().catch(() => {});
+  return true;
+}
+async function saveWeekPdf(monday) {
+  {
     const now = new Date();
     const w = weekStats(monday, S.byDay, S.absences, now);
     const saldo = saldoThrough(monday, S.byDay, S.absences, now);
@@ -861,10 +883,7 @@ async function generatePdf(monday) {
       created_at: new Date().toISOString(),
     }, { onConflict: 'user_id,week_start' });
     if (error) throw error;
-    await loadReports();
-    toast(T().pdfSaved);
-  } catch (e) { toast(T().pdfError + e.message, true); }
-  S.busy = false; render();
+  }
 }
 
 // ---------------- Tageskorrektur ----------------
@@ -921,8 +940,8 @@ async function saveEditor() {
     if (added.length) { const { error } = await sb.from('entries').insert(added); if (error) throw error; }
     S.editor = null;
     await loadEntries();
-    const m = mondayOf(ed.day);
-    toast(S.reports.some((r) => r.week_start === m) ? T().savedPdf : T().saved);
+    toast(T().saved);
+    refreshWeekPdfs(ed.day);
   } catch (e) { toast(T().error + e.message, true); }
   S.busy = false; render();
 }
@@ -1002,8 +1021,11 @@ async function toggleAbsence(day) {
   render();
   const res = next
     ? await sb.from('absences').upsert({ day, kind: next }, { onConflict: 'user_id,day' })
-    : await sb.from('absences').delete().eq('day', day);
-  if (res.error) { toast(T().error + res.error.message, true); await loadAbsences(); render(); }
+    : await sb.from('absences').delete().eq('user_id', S.user.id).eq('day', day);
+  if (res.error) { toast(T().error + res.error.message, true); await loadAbsences(); render(); return; }
+  clearTimeout(toggleAbsence.t);   // mehrmals tippen (Ferien -> ½ -> Krank): erst danach PDFs erneuern
+  toggleAbsence.from = toggleAbsence.from && toggleAbsence.from < day ? toggleAbsence.from : day;
+  toggleAbsence.t = setTimeout(() => { const d = toggleAbsence.from; toggleAbsence.from = null; refreshWeekPdfs(d); }, 4000);
 }
 
 // ---------------- Login ----------------
@@ -1171,11 +1193,39 @@ function viewProfileBox() {
   if (!p) return '';
   return `<div class="prefs"><span class="plabel">${L.profTitle}</span>
     <label class="fld"><span>${L.profName}</span><input data-prof="name" maxlength="60" value="${esc(p.name || '')}" /></label>
-    <div class="exp-grid">
+    ${p.is_admin ? `<div class="exp-grid">
       <label class="fld"><span>${L.profVac}</span><input data-prof="vacation_days" inputmode="decimal" value="${esc(String(Number(p.vacation_days ?? 20)))}" /></label>
       <label class="fld"><span>${L.profEntry}</span>${dateIn('data-prof="employment_start"', p.employment_start)}</label>
-    </div>
+    </div>` : `<div class="exp-grid">
+      <label class="fld"><span>${L.profVac}</span><input value="${esc(String(Number(p.vacation_days ?? 20)).replace('.', ','))}" disabled /></label>
+      <label class="fld"><span>${L.profEntry}</span><input value="${p.employment_start ? fmtDate(p.employment_start) : '–'}" disabled /></label>
+    </div><p class="hint">${L.profAdminOnly}</p>`}
     <p class="hint">${L.profStart(fmtDate(CONFIG.startDate))}</p></div>`;
+}
+// Admin: Ferientage / Eintritt eines Kollegen
+async function saveAdmField(k, v) {
+  const L = T(), u = S.admSel?.profile;
+  if (!u) return;
+  let val = String(v).trim();
+  if (k === 'vacation_days') { val = Number(val.replace(',', '.')); if (!(val >= 0 && val <= 60)) return toast(L.profBad, true); }
+  if (k === 'employment_start' && !val) val = null;
+  const { data, error } = await sb.from('profiles').update({ [k]: val }).eq('user_id', u.user_id).select().maybeSingle();
+  if (error || !data) return toast(L.error + (error?.message || '–'), true);
+  Object.assign(u, data);
+  if (u.user_id === S.user.id) await loadProfile().catch(() => {});
+  toast(L.profSaved);
+  render();
+}
+async function admToggle(btn) {
+  const L = T(), u = (S.admUsers || []).find((x) => x.user_id === btn.dataset.id);
+  if (!u) return;
+  if (!btn.dataset.sure) { btn.dataset.sure = '1'; btn.textContent = L.admResetSure; return; }
+  S.busy = true; render();
+  try { await admCall({ action: u.disabled ? 'enable' : 'disable', user_id: u.user_id }); }
+  catch (e) { toast(L.error + e.message, true); }
+  S.busy = false;
+  await loadAdmUsers();
+  render();
 }
 async function saveProfileField(k, v) {
   const L = T();
@@ -1222,9 +1272,10 @@ function viewAdmin() {
     <span class="plabel">${L.admUsers(us.length)}</span>
     ${S.admUsers ? `<div class="adm-list">${us.map((u) => `<div class="adm-u">
       <div><b>${esc(u.name || u.email)}${u.is_admin ? ' <em>Admin</em>' : ''}</b><small>${esc(u.email)}</small>
-      <small>${u.must_change ? L.admPending : u.start_date ? L.admSince(fmtDate(u.start_date)) : ''}</small></div>
+      <small>${u.disabled ? L.admDisabled : u.must_change ? L.admPending : u.start_date ? L.admSince(fmtDate(u.start_date)) : ''}</small></div>
       <div class="adm-b">${u.start_date ? `<button type="button" class="btn ghost" data-act="admview" data-id="${u.user_id}">${L.admTimes}</button>` : ''}
-      ${u.user_id !== S.user.id ? `<button type="button" class="link" data-act="admreset" data-id="${u.user_id}">${L.admReset}</button>` : ''}</div>
+      ${u.user_id !== S.user.id && !u.disabled ? `<button type="button" class="link" data-act="admreset" data-id="${u.user_id}">${L.admReset}</button>` : ''}
+      ${u.user_id !== S.user.id ? `<button type="button" class="link" data-act="admtoggle" data-id="${u.user_id}">${u.disabled ? L.admEnable : L.admDisable}</button>` : ''}</div>
     </div>`).join('')}</div>` : `<p class="hint"><i class="spin"></i></p>`}
   </div></div>`;
 }
@@ -1300,6 +1351,11 @@ function viewAdmUser() {
       <div><span>${L.balanceTotal}</span><b class="${saldo < 0 ? 'neg' : 'pos'}">${fmtMin(saldo, true)}</b></div>
       <div><span>${L.admVac}</span><b>${String(vac.left).replace('.', ',')} / ${String(vac.entitlement).replace('.', ',')}</b></div>
     </div>
+    <span class="plabel">${L.admSet}</span>
+    <div class="exp-grid">
+      <label class="fld"><span>${L.profVac}</span><input data-admprof="vacation_days" inputmode="decimal" value="${esc(String(Number(u.vacation_days ?? 20)))}" /></label>
+      <label class="fld"><span>${L.profEntry}</span>${dateIn('data-admprof="employment_start"', u.employment_start)}</label>
+    </div>
     <span class="plabel">${L.admLast}</span>
     ${rows.length ? `<table class="adm-t"><thead><tr><th>${L.admDate}</th><th>${L.admIn}</th><th>${L.admOut}</th><th>${L.admTotal}</th></tr></thead><tbody>${rows.join('')}</tbody></table>` : `<p class="hint">${L.admNoData}</p>`}
     <p class="hint">${L.since(fmtDate(CONFIG.startDate))}</p>`;
@@ -1312,14 +1368,14 @@ function viewAdmUser() {
 async function admPdf(ym) {
   const x = S.admSel;
   if (!x?.byDay) return;
-  await withProfile(x.profile, () => periodPdf(ym, x));
+  await periodPdf(ym, x, x.profile);
 }
 
 // ---------------- Spesen ----------------
 async function loadExpenses() {
   const [ex, rep_] = await Promise.all([
-    sb.from('expenses').select('*').order('day', { ascending: false }).order('created_at', { ascending: false }),
-    sb.from('expense_reports').select('*').order('month', { ascending: false }),
+    sb.from('expenses').select('*').eq('user_id', S.user.id).order('day', { ascending: false }).order('created_at', { ascending: false }),
+    sb.from('expense_reports').select('*').eq('user_id', S.user.id).order('month', { ascending: false }),
   ]);
   if (ex.error) throw ex.error;
   S.expenses = ex.data;
@@ -1649,7 +1705,7 @@ async function refreshSheets(days) {
       const path = `${S.user.id}/Spesen-${ym}.pdf`;
       if (!items.length) {
         if (rep) {
-          await sb.from('expense_reports').delete().eq('month', ym);
+          await sb.from('expense_reports').delete().eq('user_id', S.user.id).eq('month', ym);
           await sb.storage.from('reports').remove([rep.pdf_path]);
         }
         continue;
@@ -1843,8 +1899,9 @@ function countUp() {
   requestAnimationFrame(step);
 }
 
-let pagerBusyUntil = 0, deferredRender = null;
+let pagerBusyUntil = 0, deferredRender = null, cfgHold = 0;
 function render() {
+  if (cfgHold) { clearTimeout(deferredRender); deferredRender = setTimeout(render, 100); return; }   // Profil eines Kollegen gerade aktiv
   // läuft gerade der Seitenwechsel, Neuzeichnen (z. B. nachgeladene Spesen) bis danach verschieben -> kein Ruckeln
   const wait = pagerBusyUntil - performance.now();
   if (S.user && wait > 0 && VIEWS.indexOf(S.view) === shownIdx) { clearTimeout(deferredRender); deferredRender = setTimeout(render, wait + 16); return; }
@@ -1898,6 +1955,7 @@ app.addEventListener('change', (e) => {
   if (t.type === 'date' && t.nextElementSibling?.classList.contains('dv')) t.nextElementSibling.textContent = t.value ? fmtDate(t.value) : '–';
   if (t.matches('[data-exp-file]')) { const f = t.files?.[0]; t.value = ''; if (f) newExpense(f); return; }
   if (t.dataset.prof) { saveProfileField(t.dataset.prof, t.value); return; }
+  if (t.dataset.admprof) { saveAdmField(t.dataset.admprof, t.value); return; }
   if (!t.dataset.ed || !S.editor) return;
   S.editor.rows[+t.dataset.i][t.dataset.ed] = t.value;
 });
@@ -1970,6 +2028,7 @@ app.addEventListener('click', async (e) => {
   else if (a === 'admcreate') admCreate();
   else if (a === 'admreset') admReset(el);
   else if (a === 'admview') admView(el.dataset.id);
+  else if (a === 'admtoggle') admToggle(el);
   else if (a === 'admpdf') admPdf(el.dataset.ym);
   else if (a === 'admcopy') { navigator.clipboard?.writeText(el.dataset.txt || '').then(() => toast(T().admCopied)).catch(() => {}); }
   else if (a === 'admdone') { S.admNew = null; render(); }
@@ -2032,7 +2091,9 @@ async function togglePush() {
 
 // ---------------- Face ID (App-Sperre über WebAuthn, nur auf diesem Gerät) ----------------
 const LKEY = 'stempeluhr.lock';
-function lockId() { try { return JSON.parse(localStorage.getItem(LKEY) || 'null')?.id || null; } catch { return null; } }
+// Face-ID-Sperre gehört zum Konto, das sie eingeschaltet hat (mehrere Konten auf einem Gerät)
+function lockRec() { try { return JSON.parse(localStorage.getItem(LKEY) || 'null'); } catch { return null; } }
+function lockId() { const r = lockRec(); return r?.id && (!r.uid || !S.user || r.uid === S.user.id) ? r.id : null; }
 const u8 = (n) => crypto.getRandomValues(new Uint8Array(n));
 const toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 try {
@@ -2052,7 +2113,7 @@ async function toggleBio() {
       authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
       timeout: 60000, attestation: 'none',
     } });
-    localStorage.setItem(LKEY, JSON.stringify({ id: toB64(cred.rawId) }));
+    localStorage.setItem(LKEY, JSON.stringify({ id: toB64(cred.rawId), uid: S.user.id }));
     toast(L.bioOn);
   } catch (e) { if (e.name !== 'NotAllowedError') S.bioHint = e.message; }
   render();
@@ -2106,7 +2167,17 @@ function hideSplash() {
 sb.auth.onAuthStateChange((_ev, session) => {
   const was = S.user?.id;
   S.user = session?.user || null;
-  if (!S.user) { S.locked = false; S.profile = null; S.admUsers = null; S.admSel = null; S.admNew = null; }
+  if (!S.user || (was && S.user.id !== was)) {
+    // abgemeldet / anderes Konto: Daten des vorherigen Benutzers sofort weg
+    S.locked = false; S.profile = null; S.admUsers = null; S.admSel = null; S.admNew = null;
+    S.entries = []; S.byDay = new Map(); S.absences = new Map(); S.reports = [];
+    S.expenses = []; S.expReports = []; S.thumbs = {}; S.exp = null; S.editor = null; S.settings = false; S.drawer = false;
+  }
+  if (S.user) {
+    const r = lockRec();
+    if (r?.id && !r.uid) { try { localStorage.setItem(LKEY, JSON.stringify({ ...r, uid: S.user.id })); } catch { /* egal */ } }
+    if (!lockId()) S.locked = false;
+  }
   if (S.user && S.user.id !== was) { loadAll(); if (S.locked) unlock(); }
   else render();
   hideSplash();
