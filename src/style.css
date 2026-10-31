@@ -758,3 +758,6 @@ header .hleft { display: flex; align-items: center; gap: 14px; }
   border-color: transparent !important;
   box-shadow: inset 0 0 12px rgba(255,255,255,.05), 0 10px 30px rgba(0,0,0,.35) !important; }
 [data-theme="glas-hell"] :is(.card, .stats > div, .balance > div) { background: linear-gradient(160deg, rgba(255,255,255,.55), rgba(255,255,255,.25)) !important; box-shadow: 0 10px 30px rgba(30,40,70,.12) !important; }
+
+/* gesperrte Profilfelder (nur Admin änderbar) */
+.fld input:disabled { opacity: .55; }
