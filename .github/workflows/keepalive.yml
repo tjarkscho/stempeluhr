@@ -29,3 +29,4 @@ jobs:
         run: |
           gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable"
           gh api -X PUT "repos/${{ github.repository }}/actions/workflows/weekly-report.yml/enable"
+          gh api -X PUT "repos/${{ github.repository }}/actions/workflows/expense-report.yml/enable"
