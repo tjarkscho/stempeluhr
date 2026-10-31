@@ -17,11 +17,15 @@ const { data: users, error: uErr } = await sb.auth.admin.listUsers();
 if (uErr) throw uErr;
 const { data: profiles, error: pErr } = await sb.from('profiles').select('*');
 if (pErr) throw pErr;
+let failed = 0;
 for (const user of users.users) {
   const profile = profiles.find((p) => p.user_id === user.id);
   if (!profile?.start_date) { console.log(`${user.email}: noch nicht aktiv – übersprungen.`); continue; }
+  if (profile.disabled) { console.log(`${user.email}: gesperrt – übersprungen.`); continue; }
   applyProfile(profile);
   console.log(`--- ${user.email}`);
+  // Fehler bei einem Benutzer stoppt die anderen nicht
+  try {
 
   const today = dayKey(new Date());
   const curYm = today.slice(0, 7);
@@ -72,4 +76,9 @@ for (const user of users.users) {
     if (error) throw error;
     console.log(`${ym}: ${items.length} Belege, CHF ${tot.total.toFixed(2)} -> ${path}`);
   }
+  } catch (e) {
+    failed++;
+    console.error(`${user.email}: FEHLER`, e?.message || e);
+  }
 }
+if (failed) { console.error(`${failed} Benutzer mit Fehler`); process.exit(1); }
