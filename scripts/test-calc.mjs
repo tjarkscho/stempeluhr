@@ -1,6 +1,6 @@
 // Selbsttest der Berechnungslogik:  npm test
 import assert from 'node:assert/strict';
-import { effectiveBreak, dayStats, groupByDay, weekStats, saldoThrough, validateDay } from '../src/lib/calc.js';
+import { effectiveBreak, dayStats, groupByDay, weekStats, saldoThrough, validateDay, dayRecord } from '../src/lib/calc.js';
 import { zurichToDate, dayKey, hhmm, isoWeek } from '../src/lib/time.js';
 import { holidaysOf } from '../src/lib/holidays.js';
 
@@ -145,4 +145,19 @@ console.log('Starttag-Test OK');
   assert.equal(by4.get('2026-11-03').length, 1);
   assert.ok(dayStats(by4.get('2026-11-02'), false, new Date('2026-11-03T12:00:00Z')).incomplete);
   console.log('Nacht-/Mitternacht-Test OK');
+}
+
+// Ferien/Krank + gearbeitet: nicht doppelt; doppelte Stempel (zwei Geräte offline) gehen nicht verloren
+{
+  const at = (d, t) => zurichToDate(d, t).toISOString();
+  const ev = [{ id: 1, kind: 'in', ts: at('2026-11-04', '08:00') }, { id: 2, kind: 'out', ts: at('2026-11-04', '11:00') }];
+  const r = dayRecord('2026-11-04', groupByDay(ev), new Map([['2026-11-04', 'krank']]), new Date('2026-11-05T12:00:00Z'));
+  assert.equal(r.total, 180); assert.equal(r.credit, 300); assert.equal(r.dayTotal, 480);
+  const h = dayRecord('2026-11-04', groupByDay(ev), new Map([['2026-11-04', 'ferien_halb']]), new Date('2026-11-05T12:00:00Z'));
+  assert.equal(h.credit, 240);
+  const dup = [{ id: 1, kind: 'in', ts: at('2026-11-04', '08:00') }, { id: 2, kind: 'in', ts: at('2026-11-04', '08:05') },
+    { id: 3, kind: 'out', ts: at('2026-11-04', '12:00') }, { id: 4, kind: 'out', ts: at('2026-11-04', '12:01') }];
+  const d = dayStats(groupByDay(dup).get('2026-11-04'), false, new Date('2026-11-05T12:00:00Z'));
+  assert.equal(d.total, 240);
+  console.log('Ferien+Arbeit- / Doppelstempel-Test OK');
 }
