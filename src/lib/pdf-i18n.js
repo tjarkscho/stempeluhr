@@ -80,3 +80,14 @@ export function pdfText(lang) {
   const t = lang === 'fr' ? FR : DE;
   return { ...t, label: (s) => (s ? t.labels[s] || s : s), today: () => new Date().toLocaleDateString(t.locale, { timeZone: 'Europe/Zurich' }) };
 }
+
+// Tagesnotiz: nur Zeichen, die die PDF-Standardschrift kann; zu lang -> mit … kürzen
+const WIN = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+export function pdfSafe(s) {
+  return String(s || '').replace(/[\r\n\t]+/g, ' ').replace(/[^\x20-\x7e\xa0-\xff]/g, (c) => (WIN.includes(c) ? c : '')).replace(/ {2,}/g, ' ').trim();
+}
+export function fitText(s, font, size, maxW) {
+  if (font.widthOfTextAtSize(s, size) <= maxW) return s;
+  while (s.length > 1 && font.widthOfTextAtSize(s + '…', size) > maxW) s = s.slice(0, -1);
+  return s.trimEnd() + '…';
+}
