@@ -2,7 +2,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { CONFIG } from '../config.js';
 import { hhmm, fmtDate, fmtMin } from './time.js';
-import { pdfText } from './pdf-i18n.js';
+import { pdfText, pdfSafe, fitText } from './pdf-i18n.js';
 
 const C = {
   text: rgb(0.11, 0.12, 0.14),
@@ -83,34 +83,38 @@ export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
   const rowH = 24;
   let anyManual = false, anyAuto = false;
   for (const [i, d] of w.days.entries()) {
-    y -= rowH;
+    // Tagesnotiz: eigene kleine Zeile unter dem Tag
+    const dn = pdfSafe(opts.notes?.get(d.day));
+    y -= rowH + (dn ? 11 : 0);
+    const by = y + (dn ? 11 : 0);
+    if (dn) text(fitText(dn, font, 7.5, W - M - X.date), X.date, y + 5, { size: 7.5, color: C.muted });
     const has = !!d.in;
     const weekend = i >= 5;
     if (weekend && !has) {
-      text(t.days[i], X.day, y + 8, { color: C.faint });
-      text(fmtDate(d.day), X.date, y + 8, { color: C.faint });
+      text(t.days[i], X.day, by + 8, { color: C.faint });
+      text(fmtDate(d.day), X.date, by + 8, { color: C.faint });
       continue;
     }
     const star = (b) => (b ? (anyManual = true, '*') : '');
-    text(t.days[i], X.day, y + 8);
-    text(fmtDate(d.day), X.date, y + 8, { color: C.muted });
+    text(t.days[i], X.day, by + 8);
+    text(fmtDate(d.day), X.date, by + 8, { color: C.muted });
     if (has) {
-      text(hhmm(d.in) + star(d.manualIn), X.in, y + 8, { align: 'right' });
-      text(d.out ? hhmm(d.out) + star(d.manualOut) : '–', X.out, y + 8, { align: 'right' });
-      if (d.overnight) text(t.nextDay, X.out + 2, y + 12, { size: 6, color: C.muted });   // Ausstempeln am Folgetag
+      text(hhmm(d.in) + star(d.manualIn), X.in, by + 8, { align: 'right' });
+      text(d.out ? hhmm(d.out) + star(d.manualOut) : '–', X.out, by + 8, { align: 'right' });
+      if (d.overnight) text(t.nextDay, X.out + 2, by + 12, { size: 6, color: C.muted });   // Ausstempeln am Folgetag
       const pz = fmtMin(d.pause) + star(d.manualPause);
       if (d.autoPause) {   // hochgestellte 1 = Fussnote "Pause auf gesetzliches Minimum erhöht"
         anyAuto = true;
-        text(pz, X.pause - 5, y + 8, { align: 'right', color: C.muted });
-        text('1', X.pause - 4, y + 12, { size: 6, color: C.muted });
-      } else text(pz, X.pause, y + 8, { align: 'right', color: C.muted });
+        text(pz, X.pause - 5, by + 8, { align: 'right', color: C.muted });
+        text('1', X.pause - 4, by + 12, { size: 6, color: C.muted });
+      } else text(pz, X.pause, by + 8, { align: 'right', color: C.muted });
     }
     const future = opts.draft && opts.today && d.day > opts.today;
     const tot = future ? '' : d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '');
-    text(tot, X.total, y + 8, { align: 'right', f: bold });
+    text(tot, X.total, by + 8, { align: 'right', f: bold });
     const notes = [t.label(d.label), d.bonus ? t.bonusNote(fmtMin(d.bonus)) : null, d.nightMin ? t.nightNote(fmtMin(d.nightMin)) : null,
       d.incomplete ? t.missingOut : null].filter(Boolean).join(' · ');
-    if (notes) text(notes, X.note, y + 8, { size: 8.5, color: C.muted });
+    if (notes) text(notes, X.note, by + 8, { size: 8.5, color: C.muted });
     hline(y, 0.4);
   }
 
