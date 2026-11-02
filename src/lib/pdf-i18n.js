@@ -17,7 +17,7 @@ const DE = {
   created: (d) => `Erstellt am ${d}`,
   monthSheet: 'Monatsübersicht', yearSheet: 'Jahresübersicht', asOfToday: 'Stand heute', month: 'Monat',
   bonus: 'Zuschlag', vacation: 'Ferien', sick: 'Krank',
-  monthSums: (v, s, b) => `Ferien: ${v} Tag(e) · Krank: ${s} Tag(e) · Zuschläge: ${b}`,
+  monthSums: (v, s, b, c = 0) => `Ferien: ${v} Tag(e) · Krank: ${s} Tag(e)${c ? ` · Kompensation: ${c} Tag(e)` : ''} · Zuschläge: ${b}`,
   monthRules: 'Pausen nach ArG Art. 15 · Zuschlag als Zeit: Sa +25 %, So/Feiertag +50 %, Nacht 23–06 +25 % · Überstunden Mo–Fr 1:1',
   monthPartial: 'Laufender Monat: Werte bis und mit heute.',
   yearRules: 'Saldo = Stand am Monatsende · Pausen nach ArG Art. 15 · Zuschlag als Zeit: Sa +25 %, So/Feiertag +50 %, Nacht 23–06 +25 % · Überstunden Mo–Fr 1:1',
@@ -52,7 +52,7 @@ const FR = {
   created: (d) => `Établi le ${d}`,
   monthSheet: 'Récapitulatif mensuel', yearSheet: 'Récapitulatif annuel', asOfToday: "État à ce jour", month: 'Mois',
   bonus: 'Majoration', vacation: 'Vacances', sick: 'Maladie',
-  monthSums: (v, s, b) => `Vacances : ${v} jour(s) · Maladie : ${s} jour(s) · Majorations : ${b}`,
+  monthSums: (v, s, b, c = 0) => `Vacances : ${v} jour(s) · Maladie : ${s} jour(s)${c ? ` · Congé compensatoire : ${c} jour(s)` : ''} · Majorations : ${b}`,
   monthRules: 'Pauses selon LTr art. 15 · Majoration en temps : sa +25 %, di/férié +50 %, nuit 23–06 +25 % · Heures sup. lu–ve 1:1',
   monthPartial: "Mois en cours : valeurs jusqu'à aujourd'hui inclus.",
   yearRules: 'Solde = état en fin de mois · Pauses selon LTr art. 15 · Majoration en temps : sa +25 %, di/férié +50 %, nuit 23–06 +25 % · Heures sup. lu–ve 1:1',
@@ -71,7 +71,7 @@ const FR = {
     'Ostermontag': 'Lundi de Pâques', 'Auffahrt': 'Ascension', 'Pfingstmontag': 'Lundi de Pentecôte',
     'Bundesfeier': 'Fête nationale', 'Bettagsmontag': 'Lundi du Jeûne', 'Weihnachten': 'Noël',
     'Tag der Arbeit': 'Fête du travail', 'Stephanstag': 'Saint-Étienne',
-    'Ferien': 'Vacances', '½ Ferien': '½ vacances', 'Krank': 'Maladie',
+    'Ferien': 'Vacances', '½ Ferien': '½ vacances', 'Krank': 'Maladie', 'Kompensation': 'Congé compensatoire',
   },
 };
 
