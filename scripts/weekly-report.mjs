@@ -46,6 +46,7 @@ for (const user of users.users) {
   const entries = await all('entries', 'id,kind,ts,manual', 'ts');
   const absences = new Map((await all('absences', 'day,kind')).map((a) => [a.day, a.kind]));
   const existing = new Set((await all('weekly_reports', 'week_start')).map((r) => r.week_start));
+  const notes = new Map((await all('day_notes', 'day,note').catch(() => [])).map((n) => [n.day, n.note]));
   const byDay = groupByDay(entries);
 
   const logoPath = new URL('../public/logo-black.png', import.meta.url);
@@ -59,7 +60,7 @@ for (const user of users.users) {
     if (existing.has(m) && !(FORCE && m === lastMonday)) continue;
     const w = weekStats(m, byDay, absences, now);
     const saldo = saldoThrough(m, byDay, absences, now);
-    const bytes = await buildWeekPdf(w, saldo, logo, { lang: user.user_metadata?.lang });
+    const bytes = await buildWeekPdf(w, saldo, logo, { lang: user.user_metadata?.lang, notes });
     const path = `${user.id}/${w.year}-KW${String(w.week).padStart(2, '0')}.pdf`;
     const up = await sb.storage.from('reports').upload(path, bytes, { upsert: true, contentType: 'application/pdf', cacheControl: '0' });
     if (up.error) throw up.error;
