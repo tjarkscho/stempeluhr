@@ -47,6 +47,7 @@ const S = {
   entries: [],
   byDay: new Map(),
   absences: new Map(),
+  notes: new Map(),          // Notiz zum Tag: 'YYYY-MM-DD' -> Text
   reports: [],
   view: 'stamp',
   weekMonday: mondayOf(dayKey(new Date())),
@@ -136,12 +137,12 @@ function setEntries(serverRows) {
   S.byDay = groupByDay(S.entries);
 }
 function saveCache() {
-  lsSet(KEYS.C, { entries: S.entries.filter((e) => !e.pending), absences: [...S.absences], reports: S.reports });
+  lsSet(KEYS.C, { entries: S.entries.filter((e) => !e.pending), absences: [...S.absences], notes: [...S.notes], reports: S.reports });
 }
 function loadCache() {
   const c = lsGet(KEYS.C, null);
   if (!c) return false;
-  setEntries(c.entries || []); S.absences = new Map(c.absences || []); S.reports = c.reports || [];
+  setEntries(c.entries || []); S.absences = new Map(c.absences || []); S.notes = new Map(c.notes || []); S.reports = c.reports || [];
   return true;
 }
 let flushing = false;
@@ -174,13 +175,35 @@ async function loadAbsences() {
   S.absences = new Map(data.map((a) => [a.day, a.kind]));
   saveCache();
 }
+async function loadNotes() {
+  const { data, error } = await sb.from('day_notes').select('day,note').eq('user_id', S.user.id);
+  if (error) throw error;
+  S.notes = new Map(data.map((n) => [n.day, n.note]));
+  saveCache();
+}
+// Notiz speichern (leer = löschen)
+async function saveNote(day, text) {
+  const v = String(text || '').trim().slice(0, 200);
+  if ((S.notes.get(day) || '') === v) return true;
+  const prev = S.notes.get(day);
+  if (v) S.notes.set(day, v); else S.notes.delete(day);
+  const res = v
+    ? await sb.from('day_notes').upsert({ day, note: v }, { onConflict: 'user_id,day' })
+    : await sb.from('day_notes').delete().eq('user_id', S.user.id).eq('day', day);
+  if (res.error) {
+    if (prev) S.notes.set(day, prev); else S.notes.delete(day);
+    toast(T().error + res.error.message, true); return false;
+  }
+  saveCache();
+  return true;
+}
 async function loadReports() {
   const { data, error } = await sb.from('weekly_reports').select('*').eq('user_id', S.user.id).order('week_start', { ascending: false });
   if (error) throw error;
   S.reports = data;
 }
 // PDF-Sprache = App-Sprache; auch für die automatischen Blätter (Server liest sie aus dem Benutzerprofil)
-const pdfLang = () => ({ lang: prefs.lang });
+const pdfLang = () => ({ lang: prefs.lang, notes: S.notes });
 function syncLang(byUser = false) {
   if (S.user && S.user.user_metadata?.lang !== prefs.lang) {
     const changed = !!S.user.user_metadata?.lang;
@@ -221,7 +244,7 @@ async function loadAll() {
   render();                      // sofort aus dem Cache anzeigen
   await flushQueue();
   loadExpenses().catch(() => {});
-  try { await Promise.all([loadEntries(), loadAbsences(), loadReports()]); saveCache(); }
+  try { await Promise.all([loadEntries(), loadAbsences(), loadReports(), loadNotes().catch((e) => console.warn('Notizen', e))]); saveCache(); }
   catch (e) { if (!isNetErr(e)) toast(T().loadFailed + e.message, true); }
   if (!hadCache) countUpNext = true;
   render();
@@ -241,7 +264,7 @@ async function doBackup(auto = false) {
   try {
     if (!S.backup?.dir) await chooseFolder();
     if (!S.expenses?.length) await loadExpenses().catch(() => {});
-    await runBackup({ entries: S.entries.filter((e) => !e.pending), absences: S.absences, expenses: S.expenses, byDay: S.byDay });
+    await runBackup({ entries: S.entries.filter((e) => !e.pending), absences: S.absences, expenses: S.expenses, byDay: S.byDay, notes: S.notes });
     toast(L.bkDone);
   } catch (e) {
     if (e?.name !== 'AbortError' && !auto) toast(L.bkFail + (e.message || e), true);
@@ -498,6 +521,8 @@ function viewStamp() {
     <div><span>${L.balanceTotal}</span>${sg(saldo)}</div>
   </div>
   <div class="buttons">${buttons}</div>
+  <label class="daynote">${ICON.pen}<input data-note="${today}" maxlength="200" enterkeyhint="done" autocomplete="off"
+    placeholder="${esc(L.notePh)}" aria-label="${esc(L.noteLabel)}" value="${esc(S.noteDraft?.day === today ? S.noteDraft.v : (S.notes.get(today) || ''))}" /></label>
   <p class="hint">${L.breakHint}</p>
   <button class="link" data-act="edit" data-day="${today}">${L.correctToday}</button>
   ${outlook(L, today, live, now)}`;
@@ -536,7 +561,7 @@ function viewWeek() {
       <td>${has ? (d.out ? hhmm(d.out) + mark(d.manualOut) : (d.open ? '…' : '<b class="neg">?</b>')) : ''}</td>
       <td>${has ? fmtMin(d.pause) + mark(d.manualPause) : ''}</td>
       <td class="r"><b>${d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '')}</b>${d.label ? `<div class="tag">${esc(label(d.label))}</div>` : ''}${d.bonus ? `<div class="tag">${L.bonusTag(fmtMin(d.bonus))}${d.nightMin ? ` · ${L.nightTag}` : ''}</div>` : ''}</td>
-    </tr>`;
+    </tr>${S.notes.get(d.day) ? `<tr class="${cls} noterow" data-act="edit" data-day="${d.day}"><td colspan="5"><div class="dnote">${esc(S.notes.get(d.day))}</div></td></tr>` : ''}`;
   }).join('');
   const done = addDays(m, 6) < today;
   const rep = S.reports.find((r) => r.week_start === m);
@@ -768,7 +793,7 @@ async function periodPdf(key, D = S, prof = null) {
     const build = async () => {
     if (key.length === 7) {
       const st = rangeStats(`${key}-01`, lastOfMonth(key), D.byDay, D.absences, now);
-      bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), D.byDay, D.absences, now), logo, pdfLang());
+      bytes = await buildMonthPdf(key, st, saldoAt(lastOfMonth(key), D.byDay, D.absences, now), logo, { ...pdfLang(), notes: D.notes || new Map() });   // Notizen von Kollegen sind privat
       name = `${T().fileMonth}_${key}.pdf`;
     } else {
       const months = [];
@@ -891,7 +916,7 @@ function openEditor(day) {
   enterAnim = 'sheet';
   const events = S.byDay.get(day) || [];
   if (events.some((e) => e.pending) || !navigator.onLine) return toast(T().offlineEdit, true);
-  S.editor = { day, rows: events.map((e) => ({ id: e.id, kind: e.kind, time: hhmm(new Date(e.ts)), orig: e })) };
+  S.editor = { day, note: S.notes.get(day) || '', rows: events.map((e) => ({ id: e.id, kind: e.kind, time: hhmm(new Date(e.ts)), orig: e })) };
   render();
 }
 
@@ -907,6 +932,7 @@ function viewEditor() {
       <input type="time" value="${r.time}" data-ed="time" data-i="${i}" />${nd ? `<small class="nextday">${L.nextDay}</small>` : ''}
       <button class="icon del" data-act="edrm" data-i="${i}">${ICON.trash}</button></div>`; }).join(''); })()}
     <button class="btn ghost" data-act="edadd">${L.addEntry}</button>
+    <label class="daynote ednote">${ICON.pen}<input data-ednote="1" maxlength="200" autocomplete="off" placeholder="${esc(L.notePh)}" aria-label="${esc(L.noteLabel)}" value="${esc(ed.note || '')}" /></label>
     <p class="hint">${L.manualHint}</p>
     <button class="btn" data-act="edsave" ${S.busy ? 'disabled' : ''}>${L.save}</button>
   </div></div>`;
@@ -938,6 +964,7 @@ async function saveEditor() {
     }
     const added = rows.filter((r) => !r.id).map((r) => ({ kind: r.kind, ts: r.ts, manual: true }));
     if (added.length) { const { error } = await sb.from('entries').insert(added); if (error) throw error; }
+    if (!(await saveNote(ed.day, ed.note))) throw new Error(T().noteLabel);
     S.editor = null;
     await loadEntries();
     toast(T().saved);
@@ -1854,10 +1881,14 @@ app.addEventListener('touchend', () => {
   render();
 });
 
+// Notiz: Enter = fertig (Tastatur zu, speichert über 'change')
+app.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.target.dataset?.note || e.target.dataset?.ednote)) { e.preventDefault(); e.target.blur(); } });
 app.addEventListener('input', (e) => {
   const t = e.target;
   if (t.type === 'date' && t.nextElementSibling?.classList.contains('dv')) t.nextElementSibling.textContent = t.value ? fmtDate(t.value) : '–';
   if (t.dataset.adm === 'emails') { S.admEmails = t.value; return; }
+  if (t.dataset.note) { S.noteDraft = { day: t.dataset.note, v: t.value }; return; }
+  if (t.dataset.ednote && S.editor) { S.editor.note = t.value; return; }
   if (!t.dataset.exp || !S.exp) return;
   S.exp[t.dataset.exp] = t.value;
   S.exp.touched = { ...S.exp.touched, [t.dataset.exp]: true };
@@ -1915,6 +1946,7 @@ function render() {
   const tab = (v, l) => `<button class="${S.view === v ? 'on' : ''}" data-act="view" data-v="${v}">${l}</button>`;
   // Fokus/Scroll im Editor erhalten
   const active = document.activeElement?.dataset?.ed ? { ed: document.activeElement.dataset.ed, i: document.activeElement.dataset.i } : null;
+  const noteFocus = document.activeElement?.dataset?.note || (document.activeElement?.dataset?.ednote ? 'ed' : null);
   app.innerHTML = `
   <header><div class="hleft"><img class="hlogo" src="${import.meta.env.BASE_URL}logo.png" alt="Net Powersafe SA" />${loginDial('mini')}</div><div>
     <button class="icon" data-act="drawer" title="${L.calendar}" aria-label="${L.calendar}">${ICON.cal}</button>
@@ -1932,6 +1964,10 @@ function render() {
   animateAfterRender();
   if (countUpNext && S.view === 'stamp') { countUpNext = false; countUp(); }
   if (active) app.querySelector(`[data-ed="${active.ed}"][data-i="${active.i}"]`)?.focus();
+  if (noteFocus) {
+    const el = app.querySelector(noteFocus === 'ed' ? '[data-ednote]' : `[data-note="${noteFocus}"]`);
+    if (el) { el.focus({ preventScroll: true }); const n = el.value.length; try { el.setSelectionRange(n, n); } catch { /* egal */ } }
+  }
 }
 
 app.addEventListener('submit', async (e) => {
@@ -1956,6 +1992,11 @@ app.addEventListener('change', (e) => {
   if (t.matches('[data-exp-file]')) { const f = t.files?.[0]; t.value = ''; if (f) newExpense(f); return; }
   if (t.dataset.prof) { saveProfileField(t.dataset.prof, t.value); return; }
   if (t.dataset.admprof) { saveAdmField(t.dataset.admprof, t.value); return; }
+  if (t.dataset.note) {
+    const day = t.dataset.note, v = t.value;
+    saveNote(day, v).then((ok) => { if (S.noteDraft?.day === day && S.noteDraft.v === v) S.noteDraft = null; if (ok && v.trim()) toast(T().noteSaved); refreshWeekPdfs(day); });
+    return;
+  }
   if (!t.dataset.ed || !S.editor) return;
   S.editor.rows[+t.dataset.i][t.dataset.ed] = t.value;
 });
@@ -2044,7 +2085,7 @@ app.addEventListener('click', async (e) => {
 // Uhr aktualisieren
 // Login-Zifferblatt jede Minute nachführen (ohne die Eingaben zu verlieren)
 setInterval(tickDial, 1000);   // Login-Uhr und Uhr in der App
-setInterval(() => { if (S.user && !S.locked && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !S.prompt && !S.exp && !slide) render(); }, 30000);
+setInterval(() => { if (S.user && !S.locked && S.view === 'stamp' && !S.editor && !S.drawer && !S.settings && !S.prompt && !S.exp && !slide && !document.activeElement?.dataset?.note) render(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && S.user) countUpNext = true;
   if (!document.hidden && S.user) flushQueue().then(() => loadEntries()).then(render).catch(() => render());
@@ -2170,7 +2211,7 @@ sb.auth.onAuthStateChange((_ev, session) => {
   if (!S.user || (was && S.user.id !== was)) {
     // abgemeldet / anderes Konto: Daten des vorherigen Benutzers sofort weg
     S.locked = false; S.profile = null; S.admUsers = null; S.admSel = null; S.admNew = null;
-    S.entries = []; S.byDay = new Map(); S.absences = new Map(); S.reports = [];
+    S.entries = []; S.byDay = new Map(); S.absences = new Map(); S.notes = new Map(); S.reports = []; S.noteDraft = null;
     S.expenses = []; S.expReports = []; S.thumbs = {}; S.exp = null; S.editor = null; S.settings = false; S.drawer = false;
   }
   if (S.user) {
