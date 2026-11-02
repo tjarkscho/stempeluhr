@@ -2,7 +2,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { CONFIG } from '../config.js';
 import { hhmm, fmtDate, fmtMin, isoWeek, weekday } from './time.js';
-import { pdfText } from './pdf-i18n.js';
+import { pdfText, pdfSafe, fitText } from './pdf-i18n.js';
 
 const C = {
   text: rgb(0.11, 0.12, 0.14),
@@ -125,8 +125,9 @@ export async function buildMonthPdf(ym, st, saldo, logo = null, opts = {}) {
       text(fmtMin(d.pause), X.pause, y + 5, { align: 'right', color: C.muted });
     }
     if (d.counted && d.done && (d.dayTotal || d.soll)) text(fmtMin(d.dayTotal), X.total, y + 5, { align: 'right', f: bold, color: col });
-    const notes = [t.label(d.label), d.bonus ? t.bonusNote(fmtMin(d.bonus)) : null, d.nightMin ? t.nightNote(fmtMin(d.nightMin)) : null].filter(Boolean).join(' · ');
-    if (notes) text(notes, X.note, y + 5, { size: 8, color: C.muted });
+    const dn = pdfSafe(opts.notes?.get(d.day));   // Tagesnotiz, gekürzt auf die Spaltenbreite
+    const notes = [t.label(d.label), d.bonus ? t.bonusNote(fmtMin(d.bonus)) : null, d.nightMin ? t.nightNote(fmtMin(d.nightMin)) : null, dn || null].filter(Boolean).join(' · ');
+    if (notes) text(fitText(notes, ctx.font, 8, W - M - X.note), X.note, y + 5, { size: 8, color: C.muted });
     if (wd === 6) hline(y, 0.5, C.line);
   }
 
