@@ -167,6 +167,7 @@ export function dayTargets(day, absences) {
     else if (abs === 'ferien') { credit = CONFIG.sollDayMin; label = 'Ferien'; }
     else if (abs === 'ferien_halb') { credit = CONFIG.sollDayMin / 2; label = '½ Ferien'; }
     else if (abs === 'krank') { credit = CONFIG.sollDayMin; label = 'Krank'; }
+    else if (abs === 'kompensation') { credit = 0; label = 'Kompensation'; }   // Überstunden abbauen: Soll bleibt, Saldo sinkt
   }
   return { soll, credit, label };
 }
@@ -193,12 +194,12 @@ const isDone = (r, today) => (r.day < today && !r.open) || (r.day === today && (
 
 /**
  * Auswertung eines beliebigen Zeitraums (Monat, Jahr). Zählt nur abgeschlossene Tage.
- * @returns { days, soll, ist, diff, bonus, vacation, sick, partial }
+ * @returns { days, soll, ist, diff, bonus, vacation, sick, comp, partial }
  */
 export function rangeStats(from, to, byDay, absences, now = new Date()) {
   const today = dayKey(now);
   const days = [];
-  let soll = 0, ist = 0, bonus = 0, vacation = 0, sick = 0;
+  let soll = 0, ist = 0, bonus = 0, vacation = 0, sick = 0, comp = 0;
   for (let d = from; d <= to; d = addDays(d, 1)) {
     const r = dayRecord(d, byDay, absences, now);
     r.done = isDone(r, today);
@@ -208,8 +209,9 @@ export function rangeStats(from, to, byDay, absences, now = new Date()) {
     if (r.label === 'Ferien') vacation += 1;
     if (r.label === '½ Ferien') vacation += 0.5;
     if (r.label === 'Krank') sick += 1;
+    if (r.label === 'Kompensation') comp += 1;
   }
-  return { from, to, days, soll, ist, diff: ist - soll, bonus, vacation, sick, partial: to >= today };
+  return { from, to, days, soll, ist, diff: ist - soll, bonus, vacation, sick, comp, partial: to >= today };
 }
 
 /** Saldo vom Startdatum bis inkl. `day` (höchstens bis heute) */
@@ -224,7 +226,7 @@ export function saldoAt(day, byDay, absences, now = new Date()) {
  * Wochenauswertung.
  * @param monday   'YYYY-MM-DD'
  * @param byDay    Map aus groupByDay
- * @param absences Map 'YYYY-MM-DD' -> 'ferien' | 'ferien_halb' | 'krank'
+ * @param absences Map 'YYYY-MM-DD' -> 'ferien' | 'ferien_halb' | 'krank' | 'kompensation'
  * @param sollUntil optional: Soll nur bis inkl. diesem Tag zählen (laufende Woche)
  */
 export function weekStats(monday, byDay, absences, now = new Date(), sollUntil = null) {
