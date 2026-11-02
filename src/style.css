@@ -136,6 +136,7 @@ sup { color: var(--pause); }
 .cd.a-ferien, .legend .a-ferien { background: var(--fe); }
 .cd.a-ferien_halb, .legend .a-ferien_halb { background: var(--fh); }
 .cd.a-krank, .legend .a-krank { background: var(--kr); }
+.cd.a-kompensation, .legend .a-kompensation { background: rgba(140, 90, 220, .2); }   /* Kompensation (Überstunden abbauen) */
 .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; font-size: 13px; }
 .legend i { display: inline-block; min-width: 22px; text-align: center; padding: 2px 4px; border-radius: 6px; margin-right: 3px; }
 
@@ -775,3 +776,9 @@ table.week .dnote { font-size: 12px; color: var(--muted); display: -webkit-box; 
 .sheet .ednote { margin-top: 10px; }
 [data-theme^="glas"] .daynote { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); border-radius: 18px; backdrop-filter: blur(8px); }
 [data-theme="glas-hell"] .daynote { background: rgba(255,255,255,.5); border-color: rgba(255,255,255,.7); }
+/* Glas: Abwesenheiten im Kalender farbig (sonst überdeckt vom Glas-Hintergrund) */
+[data-theme^="glas"] .cd.hol { background: var(--ft); }
+[data-theme^="glas"] .cd.a-ferien { background: var(--fe); }
+[data-theme^="glas"] .cd.a-ferien_halb { background: var(--fh); }
+[data-theme^="glas"] .cd.a-krank { background: var(--kr); }
+[data-theme^="glas"] .cd.a-kompensation { background: rgba(160, 110, 240, .26); }
