@@ -99,7 +99,7 @@ const FR = () => ({
   sections: [
     ['Temps prévu & solde', [
       `Temps prévu : ${h(soll * 5)} par semaine, du lundi au vendredi ${h(soll)} par jour (contrat de travail).`,
-      `Décompte à partir du ${start}, solde initial 0:00.`,
+      `Décompte à partir du ${startOf()}, solde initial 0:00.`,
       'Solde = temps travaillé + crédits + majorations − temps prévu. Le jour en cours compte définitivement après le timbrage de sortie, avant en direct.',
     ]],
     ['Pauses', [
