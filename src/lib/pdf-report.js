@@ -136,7 +136,7 @@ export async function buildMonthPdf(ym, st, saldo, logo = null, opts = {}) {
     [t.saldo, fmtMin(saldo, true), signed(saldo)]]);
   const notes = [];
   if (manual) notes.push(t.manual);
-  notes.push(t.monthSums(st.vacation, st.sick, fmtMin(st.bonus)));
+  notes.push(t.monthSums(st.vacation, st.sick, fmtMin(st.bonus), st.comp));
   notes.push(t.monthRules);
   if (st.partial) notes.push(t.monthPartial);
   footer(ctx, notes, y - 20);
@@ -187,7 +187,7 @@ export async function buildYearPdf(year, months, total, saldo, logo = null, opts
   band(ctx, y, [[t.soll, fmtMin(total.soll)], [t.ist, fmtMin(total.ist)], [t.diff, fmtMin(total.diff, true), signed(total.diff)],
     [t.saldo, fmtMin(saldo, true), signed(saldo)]]);
   footer(ctx, [
-    t.monthSums(total.vacation, total.sick, fmtMin(total.bonus)),
+    t.monthSums(total.vacation, total.sick, fmtMin(total.bonus), total.comp),
     t.yearRules,
     ...(total.partial ? [t.yearPartial] : []),
   ], y - 20);
