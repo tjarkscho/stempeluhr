@@ -46,7 +46,7 @@ const csv = (rows) => '\uFEFF' + rows.map((r) => r.map((v) => {
 }).join(';')).join('\r\n');
 
 /** Sicherung schreiben. Braucht eine Nutzeraktion, falls die Ordner-Berechtigung neu erteilt werden muss. */
-export async function runBackup({ entries, absences, expenses, byDay }) {
+export async function runBackup({ entries, absences, expenses, byDay, notes = new Map() }) {
   const dir = await kv('dir');
   if (!dir) throw new Error('nofolder');
   if ((await dir.queryPermission({ mode: 'readwrite' })) !== 'granted'
@@ -65,11 +65,11 @@ export async function runBackup({ entries, absences, expenses, byDay }) {
   const days = [];
   for (let d = CONFIG.startDate; d < today; d = addDays(d, 1)) {
     const r = dayRecord(d, byDay, absences);
-    if (!r.in && !r.soll && !r.credit) continue;
+    if (!r.in && !r.soll && !r.credit && !notes.get(d)) continue;
     days.push([d, r.in ? hhmm(r.in) : '', r.out ? hhmm(r.out) : '', fmtMin(r.pause), fmtMin(r.total), fmtMin(r.bonus || 0),
-      fmtMin(r.dayTotal || 0), fmtMin(r.soll || 0), fmtMin((r.dayTotal || 0) - (r.soll || 0), true), r.label || '']);
+      fmtMin(r.dayTotal || 0), fmtMin(r.soll || 0), fmtMin((r.dayTotal || 0) - (r.soll || 0), true), r.label || '', notes.get(d) || '']);
   }
-  await write('tage.csv', csv([['Datum', 'Ein', 'Aus', 'Pause', 'Arbeitszeit', 'Zuschlag', 'Total', 'Soll', 'Differenz', 'Bemerkung'], ...days]));
+  await write('tage.csv', csv([['Datum', 'Ein', 'Aus', 'Pause', 'Arbeitszeit', 'Zuschlag', 'Total', 'Soll', 'Differenz', 'Bemerkung', 'Tagesnotiz'], ...days]));
   await write('abwesenheiten.csv', csv([['Datum', 'Art'], ...[...absences].sort(([a], [b]) => a.localeCompare(b))]));
   await write('spesen.csv', csv([['Datum', 'Kategorie', 'Betrag CHF', 'Währung', 'Originalbetrag', 'Kurs', 'km', 'Strecke', 'Notiz'],
     ...[...(expenses || [])].sort((a, b) => a.day.localeCompare(b.day))
