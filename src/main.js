@@ -974,7 +974,7 @@ async function saveEditor() {
 }
 
 // ---------------- Ferienkalender ----------------
-const ABS_CYCLE = [undefined, 'ferien', 'ferien_halb', 'krank'];
+const ABS_CYCLE = [undefined, 'ferien', 'ferien_halb', 'krank', 'kompensation'];
 
 function viewDrawer() {
   const y = S.calYear, mo = S.calMonth;
@@ -1019,7 +1019,7 @@ function viewDrawer() {
       <button class="icon" data-act="cnext" ${canNext ? '' : 'disabled'}>${ICON.next}</button>
     </div>
     <div class="cal">${L.daysShort.map((d) => `<div class="ch">${d}</div>`).join('')}${cells}</div>
-    <div class="legend"><span><i class="a-ferien">${L.absShort.ferien}</i> ${L.absF}</span><span><i class="a-ferien_halb">½</i> ${L.absH}</span><span><i class="a-krank">${L.absShort.krank}</i> ${L.absK}</span><span><i class="hol">${L.absShort.hol}</i> ${L.absFT}</span></div>
+    <div class="legend"><span><i class="a-ferien">${L.absShort.ferien}</i> ${L.absF}</span><span><i class="a-ferien_halb">½</i> ${L.absH}</span><span><i class="a-krank">${L.absShort.krank}</i> ${L.absK}</span><span><i class="a-kompensation">${L.absShort.kompensation}</i> ${L.absC}</span><span><i class="hol">${L.absShort.hol}</i> ${L.absFT}</span></div>
     <div class="heat-legend"><span>${L.heatLow}</span><i></i><span>${L.heatHigh}</span></div>
     <p class="hint">${L.absHint}</p>
     ${vacBlock(L, y)}
