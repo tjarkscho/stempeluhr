@@ -782,3 +782,17 @@ table.week .dnote { font-size: 12px; color: var(--muted); display: -webkit-box; 
 [data-theme^="glas"] .cd.a-ferien_halb { background: var(--fh); }
 [data-theme^="glas"] .cd.a-krank { background: var(--kr); }
 [data-theme^="glas"] .cd.a-kompensation { background: rgba(160, 110, 240, .26); }
+
+/* ---- Korrekturen Darstellung ---- */
+/* Notiz-Feld: das innere Eingabefeld ohne eigenes Glas/Rahmen (sonst Kasten im Kasten) */
+[data-theme^="glas"] .daynote input, .daynote input { background: none !important; border: 0 !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-radius: 0 !important; height: auto; padding: 12px 0 !important; text-overflow: ellipsis; }
+/* Status-Pille: Punkt auch bei „Ausgestempelt“ sichtbar (sonst leerer Platz links) */
+.state .dot { width: 10px; height: 10px; margin: 0; vertical-align: 0; background: var(--muted); }
+.state.s-work .dot { background: var(--go); } .state.s-break .dot { background: var(--pause); }
+/* Fenster (Einstellungen usw.): fast deckend, damit die Seite dahinter nicht durchscheint */
+html[data-theme="glas-dunkel"] :is(div.sheet, aside.drawer) { --g-solid: rgba(22,25,33,.97); }
+html[data-theme="glas-hell"] :is(div.sheet, aside.drawer) { --g-solid: rgba(246,248,252,.97); }
+html[data-theme^="glas"] :is(div.sheet, aside.drawer) { background: var(--g-fill), var(--g-solid); }
+/* Fenster scrollt: der Lichtrand (::after) würde mitscrollen und als Strich mitten im Inhalt stehen -> weglassen */
+html[data-theme^="glas"] div.sheet::after { content: none; }
