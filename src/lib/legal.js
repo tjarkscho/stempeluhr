@@ -60,6 +60,7 @@ const DE = () => ({
     ]],
     ['Korrekturen', [
       'Nachträglich geänderte oder erfasste Zeiten werden mit * „manuell korrigiert“ markiert – in der App und in allen PDFs.',
+      'Notiz zum Tag (z. B. Baustelle, Kunde, Kurs): auf der Stempel-Seite für heute, für andere Tage in der Tageskorrektur. Sie erscheint in der Woche, im Wochen- und Monats-PDF und in der PC-Sicherung. Nur du siehst sie – auch der Admin nicht.',
     ]],
     ['Spesen', [
       `Privatauto: CHF ${chf(CONFIG.kmRate)} pro km (Vereinbarung mit NPS). Betrag = km × Satz, auf den Rappen genau.`,
@@ -138,6 +139,7 @@ const FR = () => ({
     ]],
     ['Corrections', [
       'Les heures modifiées ou saisies après coup sont marquées * « corrigé manuellement » – dans l’app et dans tous les PDF.',
+      'Note du jour (p. ex. chantier, client, cours) : sur la page Timbrer pour aujourd’hui, pour les autres jours dans la correction du jour. Elle figure dans la semaine, les PDF hebdomadaire et mensuel et la sauvegarde PC. Toi seul la vois – l’admin non plus.',
     ]],
     ['Frais', [
       `Voiture privée : CHF ${chf(CONFIG.kmRate)} par km (accord avec NPS). Montant = km × taux, au centime près.`,
