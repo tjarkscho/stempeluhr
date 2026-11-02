@@ -161,3 +161,10 @@ console.log('Starttag-Test OK');
   assert.equal(d.total, 240);
   console.log('Ferien+Arbeit- / Doppelstempel-Test OK');
 }
+
+// Kompensation: Soll bleibt, keine Gutschrift -> Saldo sinkt um 8:00
+{
+  const r = dayRecord('2026-11-04', new Map(), new Map([['2026-11-04', 'kompensation']]), new Date('2026-11-05T12:00:00Z'));
+  assert.equal(r.soll, 480); assert.equal(r.credit, 0); assert.equal(r.label, 'Kompensation'); assert.equal(r.dayTotal, 0);
+  console.log('Kompensation-Test OK');
+}
