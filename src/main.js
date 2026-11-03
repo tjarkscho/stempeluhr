@@ -946,7 +946,10 @@ async function saveEditor() {
   const rows = ed.rows.map((r) => {
     if (prev && r.time < prev) dayOff = 1;
     prev = r.time;
-    return { ...r, ts: zurichToDate(addDays(ed.day, dayOff), r.time).toISOString() };
+    const ts = zurichToDate(addDays(ed.day, dayOff), r.time).toISOString();
+    // unveränderte Zeit (gleiche Minute): Original mit Sekunden behalten -> nicht als „manuell korrigiert“ markieren
+    const same = r.orig && Math.floor(new Date(r.orig.ts).getTime() / 60000) === Math.floor(new Date(ts).getTime() / 60000);
+    return { ...r, ts: same ? r.orig.ts : ts };
   }).sort((a, b) => a.ts.localeCompare(b.ts));
   if (validateDay(rows)) return toast(T().badOrder, true);
 
