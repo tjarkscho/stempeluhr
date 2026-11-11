@@ -2,7 +2,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { CONFIG } from '../config.js';
 import { hhmm, fmtDate, fmtMin } from './time.js';
-import { pdfText, pdfSafe, fitText } from './pdf-i18n.js';
+import { pdfText, pdfSafe, fitText, wrapText } from './pdf-i18n.js';
 
 const C = {
   text: rgb(0.11, 0.12, 0.14),
@@ -76,7 +76,7 @@ export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
   const X = { day: M, date: M + 78, in: M + 190, out: M + 240, pause: M + 296, total: M + 350, note: M + 370 };
   const head = [[t.day, X.day, 'left'], [t.date, X.date, 'left'], [t.in, X.in, 'right'], [t.out, X.out, 'right'],
     [t.pause, X.pause, 'right'], [t.total, X.total, 'right'], [t.note, X.note, 'left']];
-  for (const [h, x, a] of head) text(h.toUpperCase(), x, y, { size: 7, f: bold, color: C.muted, align: a });
+  for (const [h, x, a] of head) text(h.toUpperCase(), a === 'right' && x !== X.total ? x - 5 : x, y, { size: 7, f: bold, color: C.muted, align: a });
   y -= 10;
   hline(y, 0.8, C.faint);
 
@@ -95,19 +95,19 @@ export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
       text(fmtDate(d.day), X.date, by + 8, { color: C.faint });
       continue;
     }
-    const star = (b) => (b ? (anyManual = true, '*') : '');
+    // Zahlen immer an derselben Kante (X - 5) rechtsbündig; * bzw. ¹ stehen dahinter -> Spalten bleiben bündig
+    const mark = (x, on) => { if (on) { anyManual = true; text('*', x - 4, by + 8); } };
     text(t.days[i], X.day, by + 8);
     text(fmtDate(d.day), X.date, by + 8, { color: C.muted });
     if (has) {
-      text(hhmm(d.in) + star(d.manualIn), X.in, by + 8, { align: 'right' });
-      text(d.out ? hhmm(d.out) + star(d.manualOut) : '–', X.out, by + 8, { align: 'right' });
+      text(hhmm(d.in), X.in - 5, by + 8, { align: 'right' }); mark(X.in, d.manualIn);
+      text(d.out ? hhmm(d.out) : '–', X.out - 5, by + 8, { align: 'right' }); if (d.out) mark(X.out, d.manualOut);
       if (d.overnight) text(t.nextDay, X.out + 2, by + 12, { size: 6, color: C.muted });   // Ausstempeln am Folgetag
-      const pz = fmtMin(d.pause) + star(d.manualPause);
+      text(fmtMin(d.pause), X.pause - 5, by + 8, { align: 'right', color: C.muted });
       if (d.autoPause) {   // hochgestellte 1 = Fussnote "Pause auf gesetzliches Minimum erhöht"
         anyAuto = true;
-        text(pz, X.pause - 5, by + 8, { align: 'right', color: C.muted });
         text('1', X.pause - 4, by + 12, { size: 6, color: C.muted });
-      } else text(pz, X.pause, by + 8, { align: 'right', color: C.muted });
+      } else mark(X.pause, d.manualPause);
     }
     const future = opts.draft && opts.today && d.day > opts.today;
     const tot = future ? '' : d.dayTotal ? fmtMin(d.dayTotal) : (d.soll ? '0:00' : '');
@@ -142,7 +142,7 @@ export async function buildWeekPdf(w, saldo, logo = null, opts = {}) {
   notes.push(t.weekRules);
   for (const n of notes) {
     if (n.startsWith('¹ ')) { text('1', M, y + 3, { size: 5.5, color: C.muted }); text(n.slice(2), M + 5, y, { size: 7.5, color: C.muted }); }
-    else text(n, M, y, { size: 7.5, color: C.muted });
+    else for (const [k, line] of wrapText(n, font, 7.5, W - 2 * M).entries()) { if (k) y -= 10; text(line, M, y, { size: 7.5, color: C.muted }); }
     y -= 12;
   }
 
