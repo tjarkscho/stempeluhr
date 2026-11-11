@@ -91,3 +91,15 @@ export function fitText(s, font, size, maxW) {
   while (s.length > 1 && font.widthOfTextAtSize(s + '…', size) > maxW) s = s.slice(0, -1);
   return s.trimEnd() + '…';
 }
+// Fussnoten: lange Zeilen innerhalb der Ränder umbrechen (lieber bei „ · “, sonst bei Leerzeichen)
+export function wrapText(s, font, size, maxW) {
+  const lines = [];
+  let cur = '';
+  for (const part of String(s).split(/(?<= · )|(?<= )/)) {
+    const next = cur + part;
+    if (cur && font.widthOfTextAtSize(next.trimEnd(), size) > maxW) { lines.push(cur.replace(/ · $/, '').trimEnd()); cur = part; }
+    else cur = next;
+  }
+  if (cur.trim()) lines.push(cur.trimEnd());
+  return lines;
+}
