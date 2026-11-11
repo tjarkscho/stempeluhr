@@ -2,7 +2,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { CONFIG } from '../config.js';
 import { hhmm, fmtDate, fmtMin, isoWeek, weekday } from './time.js';
-import { pdfText, pdfSafe, fitText } from './pdf-i18n.js';
+import { pdfText, pdfSafe, fitText, wrapText } from './pdf-i18n.js';
 
 const C = {
   text: rgb(0.11, 0.12, 0.14),
@@ -73,9 +73,9 @@ function band(ctx, y, cells) {
 }
 
 function footer(ctx, notes, yNotes) {
-  const { M, W, text, hline, t } = ctx;
+  const { M, W, text, hline, t, font } = ctx;
   let y = yNotes;
-  for (const n of notes) { text(n, M, y, { size: 7.5, color: C.muted }); y -= 11; }
+  for (const n of notes) for (const line of wrapText(n, font, 7.5, W - 2 * M)) { text(line, M, y, { size: 7.5, color: C.muted }); y -= 11; }
   hline(M - 6, 0.4);
   text(`${CONFIG.employee} · ${CONFIG.company}`, M, M - 19, { size: 7.5, color: C.faint });
   text(t.created(t.today()), W - M, M - 19, { size: 7.5, color: C.faint, align: 'right' });
@@ -100,7 +100,7 @@ export async function buildMonthPdf(ym, st, saldo, logo = null, opts = {}) {
   y -= 20;
   const X = { day: M, date: M + 24, kw: M + 92, in: M + 160, out: M + 205, pause: M + 252, total: M + 300, note: M + 318 };
   for (const [h, x, a] of [[t.day, X.day], [t.date, X.date], [t.week, X.kw], [t.in, X.in, 'right'], [t.out, X.out, 'right'],
-    [t.pause, X.pause, 'right'], [t.total, X.total, 'right'], [t.note, X.note]]) text(h.toUpperCase(), x, y, { size: 6.5, f: bold, color: C.muted, align: a });
+    [t.pause, X.pause, 'right'], [t.total, X.total, 'right'], [t.note, X.note]]) text(h.toUpperCase(), a === 'right' && x !== X.total ? x - 4 : x, y, { size: 6.5, f: bold, color: C.muted, align: a });
   y -= 7;
   hline(y, 0.8, C.faint);
 
@@ -118,11 +118,12 @@ export async function buildMonthPdf(ym, st, saldo, logo = null, opts = {}) {
     text(fmtDate(d.day), X.date, y + 5, { color: quiet ? C.faint : C.muted });
     if (wd === 0) text(String(isoWeek(d.day).week), X.kw, y + 5, { color: C.muted, size: 8 });
     if (has) {
-      const st_ = (b) => (b ? (manual = true, '*') : '');
-      text(hhmm(d.in) + st_(d.manualIn), X.in, y + 5, { align: 'right', color: col });
-      text(d.out ? hhmm(d.out) + st_(d.manualOut) : '–', X.out, y + 5, { align: 'right', color: col });
+      // Zahlen bündig an X - 4, Stern dahinter
+      const st_ = (x, b) => { if (b) { manual = true; text('*', x - 3.5, y + 5, { color: col }); } };
+      text(hhmm(d.in), X.in - 4, y + 5, { align: 'right', color: col }); st_(X.in, d.manualIn);
+      text(d.out ? hhmm(d.out) : '–', X.out - 4, y + 5, { align: 'right', color: col }); if (d.out) st_(X.out, d.manualOut);
       if (d.overnight) text(t.nextDay, X.out + 2, y + 8, { size: 5.5, color: C.muted });
-      text(fmtMin(d.pause), X.pause, y + 5, { align: 'right', color: C.muted });
+      text(fmtMin(d.pause), X.pause - 4, y + 5, { align: 'right', color: C.muted });
     }
     if (d.counted && d.done && (d.dayTotal || d.soll)) text(fmtMin(d.dayTotal), X.total, y + 5, { align: 'right', f: bold, color: col });
     const dn = pdfSafe(opts.notes?.get(d.day));   // Tagesnotiz, gekürzt auf die Spaltenbreite
