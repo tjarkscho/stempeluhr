@@ -469,12 +469,12 @@ function viewStamp() {
   const L = T();
   const stateTxt = { off: st.in ? L.stateOff : L.stateNone, work: L.stateWork, break: L.stateBreak }[st.state];
   const now = new Date();
-  // Bilanz: heute / diese Woche / Saldo – ein laufender Tag zählt live mit
+  // Bilanz: „Heute“ läuft live mit; Woche und Saldo zeigen nur abgeschlossene Tage
+  // (der laufende Tag zählt erst nach dem Ausstempeln -> echte Überstunden, keine Hochrechnung)
   const todayDiff = st.total + t.credit - t.soll;
-  const live = st.open ? todayDiff : 0;            // offener Tag ist in den Wochenwerten noch nicht enthalten
   const wk = weekStats(mondayOf(today), S.byDay, S.absences, now, today);
-  const weekDiff = wk.diffToDate + live;
-  const saldo = saldoThrough(mondayOf(today), S.byDay, S.absences, now) + live;
+  const weekDiff = wk.diffToDate;
+  const saldo = saldoThrough(mondayOf(today), S.byDay, S.absences, now);
   const need = st.state !== 'off' ? Math.max(0, (t.soll - t.credit) - st.total) : null;
   const sg = (m) => balB(m);
   // Begrüssung + voraussichtlicher Feierabend (inkl. noch fehlender gesetzlicher Pause)
@@ -525,7 +525,7 @@ function viewStamp() {
     placeholder="${esc(L.notePh)}" aria-label="${esc(L.noteLabel)}" value="${esc(S.noteDraft?.day === today ? S.noteDraft.v : (S.notes.get(today) || ''))}" /></label>
   <p class="hint">${L.breakHint}</p>
   <button class="link" data-act="edit" data-day="${today}">${L.correctToday}</button>
-  ${outlook(L, today, live, now)}`;
+  ${outlook(L, today, 0, now)}`;
 }
 
 // Ausblick: Prognose Monatsende + nächster Feiertag / Brückentag
@@ -547,10 +547,9 @@ function viewWeek() {
   const m = S.weekMonday;
   const isCurrent = m === mondayOf(today);
   const w = weekStats(m, S.byDay, S.absences, now, isCurrent ? today : null);
-  // laufende Woche: Differenz nur bis jetzt (heute live) – gleiche Werte wie auf der Stempel-Seite
-  const live = liveToday(now);
-  const saldo = saldoThrough(m, S.byDay, S.absences, now) + (m >= mondayOf(today) ? live : 0);
-  const dw = isCurrent ? w.diffToDate + live : w.diff;
+  // laufende Woche: nur abgeschlossene Tage (heute erst nach dem Ausstempeln) – wie auf der Stempel-Seite
+  const saldo = saldoThrough(m, S.byDay, S.absences, now);
+  const dw = isCurrent ? w.diffToDate : w.diff;
   const rows = w.days.map((d, i) => {
     const has = !!d.in;
     const cls = [i >= 5 ? 'we' : '', d.day === today ? 'today' : '', d.day < CONFIG.startDate ? 'pre' : ''].join(' ');
@@ -707,7 +706,7 @@ function saldoChart(L, now) {
   const pts = [];
   for (let m = mondayOf(CONFIG.startDate); m <= mondayOf(today); m = addDays(m, 7)) {
     const sun = addDays(m, 6);
-    pts.push({ wk: isoWeek(m).week, v: saldoAt(sun, S.byDay, S.absences, now) + (sun >= today ? liveToday(now) : 0) });
+    pts.push({ wk: isoWeek(m).week, v: saldoAt(sun, S.byDay, S.absences, now) });
   }
   const P = pts.slice(-12);
   const Wd = 320, Hd = 130, pl = 8, pr = 8, pt = 14, pb = 22;
