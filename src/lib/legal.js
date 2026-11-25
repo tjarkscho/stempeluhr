@@ -49,6 +49,7 @@ const DE = () => ({
     ['Feiertage & Abwesenheiten', [
       `Bezahlte freie Tage (Vertrag, Kanton Waadt): Neujahr, Berchtoldstag, Karfreitag, Ostermontag, Tag der Arbeit, Auffahrt, Pfingstmontag, Bundesfeier, Bettagsmontag, Weihnachten, Stephanstag – je ${h(soll)} gutgeschrieben, wenn sie auf Mo–Fr fallen.`,
       `Ferien und Krankheit: ${h(soll)} pro Tag, halber Ferientag ${h(soll / 2)}.`,
+      'Zeiterfassung aktivieren (Einstellungen → Profil): Ist sie aus, wird nichts gezählt – kein Soll, keine Minusstunden. Eingeschaltet zählt Soll und Saldo ab dem Tag des Einschaltens.',
       `Kompensation (Überstunden abbauen): Der Tag hat normales Soll ${h(soll)}, es wird nichts gutgeschrieben – der Saldo sinkt um ${h(soll)}. Für einen halben Tag einfach nur den halben Tag arbeiten.`,
       `Ferienkonto: ${CONFIG.vacationDays} Tage pro Jahr (Vertrag), im Eintrittsjahr anteilig ab Eintrittsmonat, auf ½ Tag gerundet. Geplante (zukünftige) Ferien werden schon abgezogen.`,
       'Betriebsferien zwischen Weihnachten und Neujahr werden im Ferienkonto separat angezeigt – wie sie verrechnet werden, regelt NPS.',
@@ -129,6 +130,7 @@ const FR = () => ({
     ['Jours fériés & absences', [
       `Jours libres payés (contrat, canton de Vaud) : Nouvel An, Saint-Berthold, Vendredi saint, Lundi de Pâques, Fête du travail, Ascension, Lundi de Pentecôte, Fête nationale, Lundi du Jeûne, Noël, Saint-Étienne – ${h(soll)} crédités s’ils tombent du lundi au vendredi.`,
       `Vacances et maladie : ${h(soll)} par jour, demi-journée de vacances ${h(soll / 2)}.`,
+      'Activer le décompte du temps (Réglages → Profil) : désactivé, rien n’est compté – pas de temps prévu, pas d’heures négatives. Activé, le temps prévu et le solde comptent dès le jour de l’activation.',
       `Congé compensatoire (reprise d’heures sup.) : le jour garde le temps prévu de ${h(soll)}, rien n’est crédité – le solde baisse de ${h(soll)}. Pour une demi-journée, il suffit de ne travailler que la moitié.`,
       `Compte vacances : ${CONFIG.vacationDays} jours par an (contrat), au prorata l’année d’entrée dès le mois d’entrée, arrondi à ½ jour. Les vacances planifiées sont déjà déduites.`,
       'La fermeture entre Noël et Nouvel An est affichée à part dans le compte vacances – son imputation est réglée par NPS.',
