@@ -484,7 +484,7 @@ function viewStamp() {
   if (st.state !== 'off') {
     const target = Math.max(0, t.soll - t.credit);
     const extra = Math.max(0, lawBreak(target) - st.pause);   // noch fehlende gesetzliche Pause
-    if (target && need === 0 && (st.state === 'break' || extra === 0)) endTxt = L.sollReached;
+    if (target && need === 0) endTxt = st.total > target ? L.overNow(fmtMin(st.total - target)) + (extra && st.state !== 'break' ? ' · ' + L.pauseMissing(fmtMin(extra)) : '') : L.sollReached;
     else if (target) {
       endTs = new Date(now.getTime() + (need + extra) * 60000);
       endTxt = st.state === 'break' ? L.endAfterBreak(fmtMin(need)) : L.endAt(hhmm(endTs));
