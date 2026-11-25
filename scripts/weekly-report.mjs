@@ -26,6 +26,7 @@ for (const user of users.users) {
   const profile = profiles.find((p) => p.user_id === user.id);
   if (!profile?.start_date) { console.log(`${user.email}: noch nicht aktiv – übersprungen.`); continue; }
   if (profile.disabled) { console.log(`${user.email}: gesperrt – übersprungen.`); continue; }
+  if ('tracking_since' in profile && !profile.tracking_since) { console.log(`${user.email}: Zeiterfassung aus – übersprungen.`); continue; }
   applyProfile(profile);
   console.log(`--- ${user.email}`);
   // Fehler bei einem Benutzer stoppt die anderen nicht
