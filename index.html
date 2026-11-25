@@ -38,8 +38,6 @@
       document.documentElement.dataset.tod = hr >= 5 && hr < 11 ? 'morgen' : hr < 17 && hr >= 11 ? 'tag' : hr >= 17 && hr < 21 ? 'abend' : 'nacht';
       document.documentElement.dataset.theme = t;
       var pr = JSON.parse(localStorage.getItem('stempeluhr.prefs') || '{}');
-      if (pr.bg !== 'klassisch') document.documentElement.dataset.bg = 'weich';
-      document.documentElement.dataset.bgc = pr.bgc || 'graphit';
     } catch (e) {}
   </script>
   <style>
@@ -47,8 +45,8 @@
     [data-theme="creme"] #splash { background: #f3ede1; }
     [data-theme="dunkel"] #splash { background: #111317; }
     [data-theme="dunkelblau"] #splash { background: #0b1626; }
-    [data-theme="glas-hell"] #splash { background: #e9eef6; }
-    [data-theme="glas-dunkel"] #splash { background: #05070d; }
+    [data-theme="glas-hell"] #splash { background: #eceef3; }
+    [data-theme="glas-dunkel"] #splash { background: #16171c; }
     #splash img { width: 46vw; max-width: 260px; filter: brightness(0); animation: sp-in .5s ease-out both; }
     [data-theme="dunkel"] #splash img, [data-theme="dunkelblau"] #splash img, [data-theme="glas-dunkel"] #splash img { filter: brightness(0) invert(1); }
     #splash.gone { opacity: 0; pointer-events: none; }
