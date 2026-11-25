@@ -10,10 +10,14 @@ export const nameFromEmail = (email) => String(email || '').split('@')[0].split(
 
 export function profileConfig(p) {
   const today = dayKey(new Date());
+  // Zeiterfassung aus (tracking_since leer): nichts wird gezählt -> kein Soll, keine Minusstunden
+  const off = !!p && 'tracking_since' in p && !p.tracking_since;
+  const start = p?.start_date || today;
   return {
     ...BASE,
+    tracking: !off,
     employee: p?.name || nameFromEmail(p?.email) || BASE.employee,
-    startDate: p?.start_date || today,
+    startDate: off ? '9999-12-31' : (p?.tracking_since && p.tracking_since > start ? p.tracking_since : start),
     employmentStart: p?.employment_start || p?.start_date || today,
     vacationDays: p?.vacation_days != null ? Number(p.vacation_days) : BASE.vacationDays,
     hourlyRate: p?.hourly_rate ? Number(p.hourly_rate) : 0,
