@@ -47,7 +47,7 @@ const DICT = {
     greet: (h) => (h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend'),
     endAt: (t) => `Feierabend ab ${t}`, endAfterBreak: (m) => `Nach der Pause noch ${m} bis Feierabend`,
     sollReached: 'Soll für heute erreicht', niceEvening: 'Schönen Feierabend',
-    overNow: (m) => `Soll erreicht, Überzeit +${m}`, pauseMissing: (m) => `noch ${m} Pause fällig`,
+    overNow: (m) => `Soll erreicht · +${m} Überzeit`, pauseMissing: (m) => `Pause ${m} fällig`,
     heatLow: 'wenig', heatHigh: 'viel',
     workedToday: 'heute gearbeitet', in: 'Ein', out: 'Aus', remaining: 'Noch bis Soll', balance: 'Saldo',
     forgot: (d) => `${d}: Ausstempeln fehlt – tippen zum Korrigieren`,
@@ -177,7 +177,7 @@ const DICT = {
     greet: (h) => (h < 18 ? 'Bonjour' : 'Bonsoir'),
     endAt: (t) => `Fin de journée à ${t}`, endAfterBreak: (m) => `Après la pause, encore ${m} avant la fin`,
     sollReached: 'Temps du jour atteint', niceEvening: 'Bonne soirée',
-    overNow: (m) => `Temps atteint, heures sup. +${m}`, pauseMissing: (m) => `encore ${m} de pause dû`,
+    overNow: (m) => `Temps atteint · +${m} heures sup.`, pauseMissing: (m) => `pause ${m} due`,
     heatLow: 'peu', heatHigh: 'beaucoup',
     workedToday: 'travaillé aujourd’hui', in: 'Entrée', out: 'Sortie', remaining: 'Reste', balance: 'Solde',
     forgot: (d) => `${d} : sortie non timbrée – toucher pour corriger`,
@@ -292,8 +292,6 @@ export function applyPrefs() {
     : prefs.theme === 'glas' ? (mq?.matches ? 'glas-dunkel' : 'glas-hell') : prefs.theme;   // Glas: hell/dunkel wie das Gerät
   const icon = ICON_OF[theme] || theme;
   document.documentElement.dataset.theme = theme;
-  if (prefs.bg === 'klassisch') delete document.documentElement.dataset.bg; else document.documentElement.dataset.bg = prefs.bg;
-  document.documentElement.dataset.bgc = prefs.bgc;
   document.documentElement.lang = prefs.lang === 'fr' ? 'fr-CH' : 'de-CH';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[theme]);
   // Icons passend zum Farbschema
