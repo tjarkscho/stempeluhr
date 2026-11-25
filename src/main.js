@@ -515,17 +515,17 @@ function viewStamp() {
       <div><span>${L.remaining}</span><b>${need != null ? fmtMin(need) : '–'}</b></div>
     </div>
   </section>
-  <div class="balance">
+  ${CONFIG.tracking === false ? `<p class="hint trackoff">${L.trackOffStamp}</p>` : `<div class="balance">
     <div><span>${L.diffToday}</span>${sg(todayDiff)}</div>
     <div><span>${L.tabWeek}</span>${sg(weekDiff)}</div>
     <div><span>${L.balanceTotal}</span>${sg(saldo)}</div>
-  </div>
+  </div>`}
   <div class="buttons">${buttons}</div>
   <label class="daynote">${ICON.pen}<input data-note="${today}" maxlength="200" enterkeyhint="done" autocomplete="off"
     placeholder="${esc(L.notePh)}" aria-label="${esc(L.noteLabel)}" value="${esc(S.noteDraft?.day === today ? S.noteDraft.v : (S.notes.get(today) || ''))}" /></label>
   <p class="hint">${L.breakHint}</p>
   <button class="link" data-act="edit" data-day="${today}">${L.correctToday}</button>
-  ${outlook(L, today, 0, now)}`;
+  ${CONFIG.tracking === false ? '' : outlook(L, today, 0, now)}`;
 }
 
 // Ausblick: Prognose Monatsende + nächster Feiertag / Brückentag
@@ -576,13 +576,13 @@ function viewWeek() {
       <tbody>${rows}</tbody>
     </table>
   </section>
-  <div class="stats">
+  ${CONFIG.tracking === false ? `<p class="hint trackoff">${L.trackOffStamp}</p>` : `<div class="stats">
     <div><span>${L.targetWeek}</span><b>${fmtMin(w.soll)}</b></div>
     <div><span>${L.actualWeek}</span><b>${fmtMin(w.ist + w.days.reduce((a, d) => a + (d.open && d.counted ? d.dayTotal : 0), 0))}</b>${w.bonus ? `<small class="sub2">${L.bonus} ${fmtMin(w.bonus)}</small>` : ''}</div>
     <div><span>${L.diffWeek}</span>${balB(dw)}${isCurrent ? `<small class="sub2">${L.untilToday}</small>` : ''}</div>
     <div><span>${L.balanceTotal}</span>${balB(saldo)}<small class="sub2">${L.since(fmtDate(CONFIG.startDate))}</small></div>
   </div>
-  ${saldoChart(L, now)}
+  ${saldoChart(L, now)}`}
   <p class="hint">${L.weekHint}</p>
   ${done && addDays(m, 6) >= CONFIG.startDate ? `<button class="btn" data-act="genpdf" ${S.busy ? 'disabled' : ''}>${rep ? L.pdfRemake : L.pdfMake}</button>` : ''}
   ${isCurrent ? `<button class="btn ghost" data-act="draftpdf" ${S.busy ? 'disabled' : ''}>${L.pdfDraft}</button><p class="hint">${L.pdfDraftHint}</p>` : ''}
@@ -1220,7 +1220,10 @@ async function submitNewPw(f) {
 function viewProfileBox() {
   const L = T(), p = S.profile;
   if (!p) return '';
+  const on = CONFIG.tracking !== false;
   return `<div class="prefs"><span class="plabel">${L.profTitle}</span>
+    <button type="button" class="toggle ${on ? 'on' : ''}" data-act="tracking" ${S.busy ? 'disabled' : ''}><span>${L.trackLabel}</span><i></i></button>
+    <p class="hint">${on ? L.trackOnHint(fmtDate(CONFIG.startDate)) : L.trackOffHint}</p>
     <label class="fld"><span>${L.profName}</span><input data-prof="name" maxlength="60" value="${esc(p.name || '')}" /></label>
     ${p.is_admin ? `<div class="exp-grid">
       <label class="fld"><span>${L.profVac}</span><input data-prof="vacation_days" inputmode="decimal" value="${esc(String(Number(p.vacation_days ?? 20)))}" /></label>
@@ -1229,7 +1232,20 @@ function viewProfileBox() {
       <label class="fld"><span>${L.profVac}</span><input value="${esc(String(Number(p.vacation_days ?? 20)).replace('.', ','))}" disabled /></label>
       <label class="fld"><span>${L.profEntry}</span><input value="${p.employment_start ? fmtDate(p.employment_start) : '–'}" disabled /></label>
     </div><p class="hint">${L.profAdminOnly}</p>`}
-    <p class="hint">${L.profStart(fmtDate(CONFIG.startDate))}</p></div>`;
+    ${on ? `<p class="hint">${L.profStart(fmtDate(CONFIG.startDate))}</p>` : ''}</div>`;
+}
+// Zeiterfassung ein/aus: ein = zählt ab heute (bzw. ab Zählbeginn), aus = nichts zählt
+async function toggleTracking(btn, userId = S.user.id, prof = S.profile) {
+  const L = T();
+  const on = prof && 'tracking_since' in prof ? !!prof.tracking_since : true;
+  if (on && !btn.dataset.sure) { btn.dataset.sure = '1'; btn.querySelector('span').textContent = L.trackOffSure; return; }
+  const val = on ? null : dayKey(new Date());
+  const { data, error } = await sb.from('profiles').update({ tracking_since: val }).eq('user_id', userId).select().maybeSingle();
+  if (error || !data) return toast(L.error + (error?.message || '–'), true);
+  Object.assign(prof, data);
+  if (userId === S.user.id) { await loadProfile().catch(() => {}); saveCache(); }
+  toast(L.profSaved);
+  render();
 }
 // Admin: Ferientage / Eintritt eines Kollegen
 async function saveAdmField(k, v) {
@@ -1301,7 +1317,7 @@ function viewAdmin() {
     <span class="plabel">${L.admUsers(us.length)}</span>
     ${S.admUsers ? `<div class="adm-list">${us.map((u) => `<div class="adm-u">
       <div><b>${esc(u.name || u.email)}${u.is_admin ? ' <em>Admin</em>' : ''}</b><small>${esc(u.email)}</small>
-      <small>${u.disabled ? L.admDisabled : u.must_change ? L.admPending : u.start_date ? L.admSince(fmtDate(u.start_date)) : ''}</small></div>
+      <small>${u.disabled ? L.admDisabled : u.must_change ? L.admPending : ('tracking_since' in u && !u.tracking_since) ? L.admTrackOff : u.start_date ? L.admSince(fmtDate(u.tracking_since && u.tracking_since > u.start_date ? u.tracking_since : u.start_date)) : ''}</small></div>
       <div class="adm-b">${u.start_date ? `<button type="button" class="btn ghost" data-act="admview" data-id="${u.user_id}">${L.admTimes}</button>` : ''}
       ${u.user_id !== S.user.id && !u.disabled ? `<button type="button" class="link" data-act="admreset" data-id="${u.user_id}">${L.admReset}</button>` : ''}
       ${u.user_id !== S.user.id ? `<button type="button" class="link" data-act="admtoggle" data-id="${u.user_id}">${u.disabled ? L.admEnable : L.admDisable}</button>` : ''}</div>
@@ -1381,6 +1397,7 @@ function viewAdmUser() {
       <div><span>${L.admVac}</span><b>${String(vac.left).replace('.', ',')} / ${String(vac.entitlement).replace('.', ',')}</b></div>
     </div>
     <span class="plabel">${L.admSet}</span>
+    <button type="button" class="toggle ${'tracking_since' in u && !u.tracking_since ? '' : 'on'}" data-act="admtrack"><span>${L.trackLabel}</span><i></i></button>
     <div class="exp-grid">
       <label class="fld"><span>${L.profVac}</span><input data-admprof="vacation_days" inputmode="decimal" value="${esc(String(Number(u.vacation_days ?? 20)))}" /></label>
       <label class="fld"><span>${L.profEntry}</span>${dateIn('data-admprof="employment_start"', u.employment_start)}</label>
@@ -2072,6 +2089,8 @@ app.addEventListener('click', async (e) => {
   else if (a === 'admreset') admReset(el);
   else if (a === 'admview') admView(el.dataset.id);
   else if (a === 'admtoggle') admToggle(el);
+  else if (a === 'tracking') toggleTracking(el);
+  else if (a === 'admtrack' && S.admSel?.profile) toggleTracking(el, S.admSel.profile.user_id, S.admSel.profile);
   else if (a === 'admpdf') admPdf(el.dataset.ym);
   else if (a === 'admcopy') { navigator.clipboard?.writeText(el.dataset.txt || '').then(() => toast(T().admCopied)).catch(() => {}); }
   else if (a === 'admdone') { S.admNew = null; render(); }
